@@ -29,3 +29,5 @@ class User(TimestampMixin, Base):
     career_goals: Mapped[str | None] = mapped_column(Text)
     consent_given_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set only for generated learners: the persona is the ground truth for evaluation (app/services/synthetic.py)
+    synthetic_persona: Mapped[str | None] = mapped_column(String(30), index=True)

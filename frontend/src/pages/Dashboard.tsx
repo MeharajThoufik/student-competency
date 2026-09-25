@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Award, GraduationCap, Plus, Sparkles } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { CompetencyProfile } from '../components/CompetencyProfile'
 import { Card, EvidenceBadge } from '../components/ui'
 import { api } from '../lib/api'
 
@@ -55,6 +56,8 @@ export function Dashboard() {
         <Stat label="Skills" value={skills.data?.length ?? 0} icon={Sparkles} to="/app/skills" />
       </div>
 
+      <CompetencyProfile />
+
       <Card title="Recent activities" action={<Link to="/app/activities" className="text-sm text-slate-600 hover:underline">View all</Link>}>
         {acts.length === 0 ? (
           <p className="text-sm text-slate-500">No activities yet. Add your first project, certificate or event.</p>
@@ -75,12 +78,6 @@ export function Dashboard() {
         )}
       </Card>
 
-      <Card>
-        <p className="text-sm text-slate-600">
-          <span className="font-medium text-slate-900">Coming next:</span> your competency radar and growth charts are
-          calculated from these activities in the next release.
-        </p>
-      </Card>
     </div>
   )
 }

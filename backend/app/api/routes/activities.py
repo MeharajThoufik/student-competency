@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.models import Activity, ActivityType, EvidenceFile, Role, User
 from app.schemas import ActivityIn, ActivityOut, ActivityTypeOut, EvidenceOut
+from app.services.competency import record_snapshot
 from app.services.storage import get_storage
 
 router = APIRouter(tags=["activities"])
@@ -67,6 +68,7 @@ def create_activity(body: ActivityIn, user: User = Depends(require_consent), db:
     _apply(activity, body, db)
     db.add(activity)
     db.commit()
+    record_snapshot(db, user.id, "activity_created", activity.id)
     db.refresh(activity)
     return activity
 
@@ -88,6 +90,7 @@ def update_activity(
         activity.verified_by = None
         activity.verified_at = None
     db.commit()
+    record_snapshot(db, user.id, "activity_updated", activity.id)
     db.refresh(activity)
     return activity
 
@@ -98,6 +101,7 @@ def delete_activity(activity_id: int, user: User = Depends(require_consent), db:
     keys = [e.storage_key for e in activity.evidence]
     db.delete(activity)
     db.commit()
+    record_snapshot(db, user.id, "activity_deleted", activity_id)
     storage = get_storage()
     for key in keys:
         storage.delete(key)
@@ -134,6 +138,7 @@ async def upload_evidence(
     )
     db.add(evidence)
     db.commit()
+    record_snapshot(db, user.id, "evidence_added", activity.id)
     return evidence
 
 
@@ -149,7 +154,11 @@ def _readable_evidence(db: Session, evidence_id: int, user: User) -> EvidenceFil
 @router.get("/evidence/{evidence_id}/file")
 def download_evidence(evidence_id: int, user: User = Depends(require_consent), db: Session = Depends(get_db)):
     evidence = _readable_evidence(db, evidence_id, user)
-    data = get_storage().load(evidence.storage_key)
+    try:
+        data = get_storage().load(evidence.storage_key)
+    except Exception:
+        # Missing object, e.g. a synthetic learner's placeholder evidence.
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Evidence file not available")
     # ASCII fallback plus RFC 5987 UTF-8 name, since headers must be latin-1.
     ascii_name = evidence.filename.encode("ascii", "replace").decode().replace('"', "").replace("?", "_")
     return Response(
@@ -178,4 +187,5 @@ def delete_evidence(evidence_id: int, user: User = Depends(require_consent), db:
         activity.verified_at = None
     db.commit()
     get_storage().delete(key)
+    record_snapshot(db, user.id, "evidence_removed", activity.id)
     return Response(status_code=204)

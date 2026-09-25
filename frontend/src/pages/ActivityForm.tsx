@@ -47,6 +47,7 @@ function Form({ activity, types }: { activity?: Activity; types: { id: number; l
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['activities'] })
     queryClient.invalidateQueries({ queryKey: ['activity'] })
+    queryClient.invalidateQueries({ queryKey: ['competencies'] })
   }
 
   // Set once the activity exists, so a retry after a failed upload updates instead of creating a duplicate.

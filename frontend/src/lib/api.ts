@@ -69,6 +69,30 @@ export type Activity = Omit<ActivityIn, 'type_id'> & {
   updated_at: string
 }
 
+export type Contribution = {
+  activity_id: number
+  title: string
+  type_key: string
+  date: string
+  weight: number
+  level: number
+  confidence: number
+  decay: number
+  points: number
+}
+export type CompetencyScore = { key: string; label: string; score: number; raw: number; contributions: Contribution[] }
+export type LearnerCompetencies = { as_of: string; activity_count: number; scores: CompetencyScore[] }
+export type ScoringConfig = {
+  competencies: { key: string; label: string; description: string | null }[]
+  activity_types: Record<string, string>
+  weights: Record<string, Record<string, number>>
+  half_life_months: number
+  k: number
+  confidence: Record<string, number>
+  outcome: Record<string, number>
+  scope: Record<string, number>
+}
+
 export type Health = {
   status: string
   version: string
@@ -144,6 +168,9 @@ export const api = {
     return request<Evidence>(`/me/activities/${activityId}/evidence`, { method: 'POST', body: form })
   },
   deleteEvidence: (id: number) => request<void>(`/evidence/${id}`, { method: 'DELETE' }),
+
+  competencies: (asOf?: string) => request<LearnerCompetencies>(`/me/competencies${asOf ? `?as_of=${asOf}` : ''}`),
+  scoringConfig: () => request<ScoringConfig>('/competencies/config'),
 }
 
 /** Evidence files need the auth header, so fetch as a blob and open it in a new tab. */

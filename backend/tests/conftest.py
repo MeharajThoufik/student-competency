@@ -11,7 +11,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi import Header, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -20,8 +20,8 @@ from app.core.auth import get_token_claims
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.main import app
-from app.models import ActivityType, Base
-from app.models.seed import ACTIVITY_TYPES
+from app.models import ActivityType, Base, Competency, MappingWeight
+from app.models.seed import ACTIVITY_TYPES, COMPETENCIES, MAPPING_WEIGHTS
 from app.services.storage import LocalStorage
 
 TEST_DB_URL = os.environ.get("TEST_DATABASE_URL")
@@ -33,11 +33,20 @@ def engine():
         eng = create_engine(TEST_DB_URL)
     else:
         eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        # Enforce foreign keys (incl. ON DELETE CASCADE) like Postgres does.
+        event.listen(eng, "connect", lambda conn, _: conn.execute("PRAGMA foreign_keys=ON"))
     Base.metadata.drop_all(eng)
     Base.metadata.create_all(eng)
     with Session(eng) as s:
+        types = [ActivityType(key=k, label=label, description=d, sort_order=i) for i, (k, label, d) in enumerate(ACTIVITY_TYPES)]
+        comps = [Competency(key=k, label=label, description=d, sort_order=i) for i, (k, label, d) in enumerate(COMPETENCIES)]
+        s.add_all(types + comps)
+        s.flush()
+        comp_ids = {c.key: c.id for c in comps}
         s.add_all(
-            ActivityType(key=k, label=label, description=d, sort_order=i) for i, (k, label, d) in enumerate(ACTIVITY_TYPES)
+            MappingWeight(activity_type_id=t.id, competency_id=comp_ids[c], weight=w)
+            for t in types
+            for c, w in MAPPING_WEIGHTS[t.key].items()
         )
         s.commit()
     yield eng
