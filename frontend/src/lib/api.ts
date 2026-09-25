@@ -1,0 +1,161 @@
+import { auth } from './firebase'
+
+// ---------- Types (mirror backend/app/schemas.py) ----------
+export type Role = 'learner' | 'educator' | 'admin'
+
+export type User = {
+  id: number
+  email: string
+  name: string
+  role: Role
+  register_no: string | null
+  programme: string | null
+  department: string | null
+  batch: string | null
+  bio: string | null
+  career_goals: string | null
+  consent_given_at: string | null
+}
+export type UserUpdate = Partial<Omit<User, 'id' | 'email' | 'role' | 'consent_given_at'>>
+
+export const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'F', 'Ab'] as const
+export type Grade = (typeof GRADES)[number]
+export type AcademicIn = { semester: number; course_code: string; course_name: string; credits: number; grade: Grade }
+export type Academic = AcademicIn & { id: number }
+export type AcademicSummary = {
+  semesters: { semester: number; credits: number; sgpa: number }[]
+  cgpa: number | null
+  total_credits: number
+}
+
+export const SKILL_CATEGORIES = ['technical', 'soft', 'domain', 'tool'] as const
+export type SkillIn = { name: string; category: (typeof SKILL_CATEGORIES)[number]; self_level: number }
+export type Skill = SkillIn & { id: number }
+export type InterestIn = { tag: string; level: number }
+export type Interest = InterestIn & { id: number; created_at: string }
+
+export const OUTCOMES = ['participant', 'contributor', 'lead', 'completed', 'finalist', 'winner'] as const
+export const SCOPES = ['personal', 'institute', 'state', 'national', 'international'] as const
+export type ActivityType = { id: number; key: string; label: string; description: string | null }
+export type ActivityIn = {
+  type_id: number
+  title: string
+  description: string | null
+  organization: string | null
+  start_date: string
+  end_date: string | null
+  outcome: (typeof OUTCOMES)[number]
+  scope: (typeof SCOPES)[number]
+  skills: string[]
+  url: string | null
+}
+export type Evidence = {
+  id: number
+  filename: string
+  content_type: string
+  size_bytes: number
+  sha256: string
+  uploaded_at: string
+}
+export type EvidenceStatus = 'self_reported' | 'evidence_attached' | 'verified'
+export type Activity = Omit<ActivityIn, 'type_id'> & {
+  id: number
+  type: ActivityType
+  verification_status: 'unverified' | 'verified' | 'rejected'
+  evidence_status: EvidenceStatus
+  review_note: string | null
+  evidence: Evidence[]
+  created_at: string
+  updated_at: string
+}
+
+export type Health = {
+  status: string
+  version: string
+  environment: string
+  database: 'ok' | 'unavailable' | 'not_configured'
+}
+
+// ---------- Client ----------
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  const token = await auth.currentUser?.getIdToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
+
+  const res = await fetch(`/api${path}`, { ...init, headers })
+  if (!res.ok) throw new ApiError(res.status, await errorMessage(res))
+  if (res.status === 204) return undefined as T
+  return res.json()
+}
+
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json()
+    if (typeof body.detail === 'string') return body.detail
+    if (Array.isArray(body.detail)) return body.detail.map((d: { msg: string }) => d.msg.replace(/^Value error, /, '')).join('; ')
+  } catch {
+    /* not JSON */
+  }
+  return `Request failed (${res.status})`
+}
+
+const json = (method: string, body?: unknown): RequestInit => ({ method, body: JSON.stringify(body) })
+
+export const api = {
+  health: () => request<Health>('/health'),
+
+  me: () => request<User>('/me'),
+  updateMe: (body: UserUpdate) => request<User>('/me', json('PATCH', body)),
+  consent: () => request<User>('/me/consent', { method: 'POST' }),
+
+  academics: () => request<Academic[]>('/me/academics'),
+  academicSummary: () => request<AcademicSummary>('/me/academics/summary'),
+  createAcademic: (body: AcademicIn) => request<Academic>('/me/academics', json('POST', body)),
+  deleteAcademic: (id: number) => request<void>(`/me/academics/${id}`, { method: 'DELETE' }),
+
+  skills: () => request<Skill[]>('/me/skills'),
+  createSkill: (body: SkillIn) => request<Skill>('/me/skills', json('POST', body)),
+  updateSkill: (id: number, body: SkillIn) => request<Skill>(`/me/skills/${id}`, json('PUT', body)),
+  deleteSkill: (id: number) => request<void>(`/me/skills/${id}`, { method: 'DELETE' }),
+
+  interests: () => request<Interest[]>('/me/interests'),
+  createInterest: (body: InterestIn) => request<Interest>('/me/interests', json('POST', body)),
+  deleteInterest: (id: number) => request<void>(`/me/interests/${id}`, { method: 'DELETE' }),
+
+  activityTypes: () => request<ActivityType[]>('/activity-types'),
+  activities: () => request<Activity[]>('/me/activities'),
+  activity: (id: number) => request<Activity>(`/me/activities/${id}`),
+  createActivity: (body: ActivityIn) => request<Activity>('/me/activities', json('POST', body)),
+  updateActivity: (id: number, body: ActivityIn) => request<Activity>(`/me/activities/${id}`, json('PUT', body)),
+  deleteActivity: (id: number) => request<void>(`/me/activities/${id}`, { method: 'DELETE' }),
+
+  uploadEvidence: (activityId: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<Evidence>(`/me/activities/${activityId}/evidence`, { method: 'POST', body: form })
+  },
+  deleteEvidence: (id: number) => request<void>(`/evidence/${id}`, { method: 'DELETE' }),
+}
+
+/** Evidence files need the auth header, so fetch as a blob and open it in a new tab. */
+export async function openEvidence(id: number): Promise<void> {
+  const tab = window.open('', '_blank')
+  const token = await auth.currentUser?.getIdToken()
+  const res = await fetch(`/api/evidence/${id}/file`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) {
+    tab?.close()
+    throw new ApiError(res.status, await errorMessage(res))
+  }
+  const url = URL.createObjectURL(await res.blob())
+  if (tab) tab.location.href = url
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}

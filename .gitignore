@@ -26,3 +26,9 @@ Thumbs.db
 /*.pdf
 /*.docx
 /*.pptx
+
+# Local evidence uploads
+backend/uploads/
+
+# Public Firebase web config (not secret) is needed by the CI build
+!frontend/.env

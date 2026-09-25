@@ -9,10 +9,23 @@ env:
   REGION: asia-south1
   SERVICE: competency-api
   REPO: competency
+  SQL_INSTANCE: student-competence:asia-south1:competency-db
+  RUNTIME_SA: competency-api@student-competence.iam.gserviceaccount.com
+  EVIDENCE_BUCKET: student-competence-evidence
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: competency
+          POSTGRES_PASSWORD: competency
+          POSTGRES_DB: competency
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U competency" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -21,9 +34,16 @@ jobs:
           python-version: "3.12"
       - name: Backend tests
         working-directory: backend
+        env:
+          PG: postgresql+psycopg://competency:competency@localhost:5432
         run: |
           pip install -r requirements-dev.txt
-          pytest -q
+          # Migrations apply cleanly and match the models
+          DATABASE_URL=$PG/competency alembic upgrade head
+          DATABASE_URL=$PG/competency alembic check
+          # Tests on Postgres (separate database)
+          psql "postgresql://competency:competency@localhost:5432/competency" -c "CREATE DATABASE competency_test"
+          TEST_DATABASE_URL=$PG/competency_test pytest -q
 
       - uses: actions/setup-node@v4
         with:
@@ -70,7 +90,10 @@ jobs:
             --allow-unauthenticated \
             --min-instances 0 --max-instances 3 \
             --memory 512Mi \
-            --set-env-vars ENVIRONMENT=production
+            --service-account ${RUNTIME_SA} \
+            --add-cloudsql-instances ${SQL_INSTANCE} \
+            --update-secrets DATABASE_URL=database-url:latest \
+            --update-env-vars ENVIRONMENT=production,STORAGE_BACKEND=gcs,GCS_BUCKET=${EVIDENCE_BUCKET},FIREBASE_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
 
       - uses: actions/download-artifact@v4
         with:
