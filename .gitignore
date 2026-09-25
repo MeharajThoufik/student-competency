@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.env
+
+# Node
+node_modules/
+dist/
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Secrets
+*-key.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Original case-study documents (kept local; repo is public)
+/*.pdf
+/*.docx
+/*.pptx
