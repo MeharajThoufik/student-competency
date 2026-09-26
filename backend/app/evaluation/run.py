@@ -188,6 +188,12 @@ def report(r: dict) -> str:
         f"| **Balanced accuracy** | **{td['balanced_accuracy']:.3f}** | **{tt['balanced_accuracy']:.3f}** |",
         f"| Accuracy | {td['accuracy']:.3f} | {tt['accuracy']:.3f} |",
         "",
+        "**Design decision.** The deployed app keeps the default 6-month window and 1.0 points/month threshold. Longer "
+        "windows score higher against the personas, whose trajectories are defined over two years, but a learner-facing "
+        "label should react to the last few months of activity so that feedback is timely and actionable; the tuned "
+        "setting also labels most all-rounders 'Improving'. The window and threshold are parameters "
+        "(`TrendParams`), so an institution can choose the other side of this trade-off.",
+        "",
         f"![Confusion matrices]({r['figures'][1]})",
         "",
         f"![Parameter sweep]({r['figures'][2]})",

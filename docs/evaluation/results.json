@@ -17,7 +17,7 @@
       "window_months": 6,
       "slope_threshold": 1.0
     },
-    "runtime_s": 119.2
+    "runtime_s": 119.4
   },
   "dataset": {
     "learners": 200,
@@ -603,18 +603,18 @@
   },
   "scalability": {
     "200": {
-      "current_scores_s": 0.063,
-      "cohort_trends_s": 0.401
+      "current_scores_s": 0.064,
+      "cohort_trends_s": 0.449
     },
     "500": {
-      "current_scores_s": 0.156,
-      "cohort_trends_s": 1.123
+      "current_scores_s": 0.215,
+      "cohort_trends_s": 1.138
     },
     "1000": {
-      "current_scores_s": 0.345,
-      "cohort_trends_s": 2.092
+      "current_scores_s": 0.342,
+      "cohort_trends_s": 2.574
     },
-    "insights_ms_per_learner": 14.4,
+    "insights_ms_per_learner": 18.0,
     "mean_activities": 17.0
   },
   "figures": [
