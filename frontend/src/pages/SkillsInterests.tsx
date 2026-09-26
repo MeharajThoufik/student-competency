@@ -92,7 +92,10 @@ function Interests() {
   const queryClient = useQueryClient()
   const interests = useQuery({ queryKey: ['interests'], queryFn: api.interests })
   const [form, setForm] = useState<InterestIn>({ tag: '', level: 3 })
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['interests'] })
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['interests'] })
+    queryClient.invalidateQueries({ queryKey: ['insights'] })
+  }
   const create = useMutation({
     mutationFn: api.createInterest,
     onSuccess: () => {

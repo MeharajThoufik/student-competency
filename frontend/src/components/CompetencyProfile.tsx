@@ -28,7 +28,14 @@ export function CompetencyProfile() {
   return (
     <Card
       title="Competency profile"
-      action={<span className="text-xs text-slate-500">From {data.data.activity_count} activities · as of {data.data.as_of}</span>}
+      action={
+        <span className="flex items-center gap-3 text-xs text-slate-500">
+          From {data.data.activity_count} activities · as of {data.data.as_of}
+          <Link to="/app/growth" className="font-medium text-slate-700 hover:underline">
+            See growth →
+          </Link>
+        </span>
+      }
     >
       {empty ? (
         <p className="text-sm text-slate-600">

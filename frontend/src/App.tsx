@@ -6,6 +6,7 @@ import { Activities } from './pages/Activities'
 import { ActivityForm } from './pages/ActivityForm'
 import { Consent } from './pages/Consent'
 import { Dashboard } from './pages/Dashboard'
+import { Growth } from './pages/Growth'
 import { Landing } from './pages/Landing'
 import { Login } from './pages/Login'
 import { Profile } from './pages/Profile'
@@ -27,6 +28,7 @@ export default function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="growth" element={<Growth />} />
           <Route path="activities" element={<Activities />} />
           <Route path="activities/new" element={<ActivityForm />} />
           <Route path="activities/:id" element={<ActivityForm />} />

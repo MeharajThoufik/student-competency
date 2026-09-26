@@ -93,6 +93,58 @@ export type ScoringConfig = {
   scope: Record<string, number>
 }
 
+export type Trend = 'emerging' | 'improving' | 'stable' | 'declining' | 'inactive'
+export type CompetencyTrend = {
+  key: string
+  label: string
+  score: number
+  previous: number
+  change: number
+  slope: number
+  trend: Trend
+  percentile: number | null
+}
+export type Recommendation = {
+  kind: 'gap' | 'declining' | 'evidence'
+  competency: string | null
+  title: string
+  detail: string
+  gain: number
+  activity_types: string[]
+  activity_ids: number[]
+}
+export type TimelineEntry = {
+  activity_id: number
+  title: string
+  type_key: string
+  start_date: string
+  end_date: string | null
+  evidence_status: EvidenceStatus | 'rejected'
+  deltas: Record<string, number>
+}
+export type InterestDrift = {
+  since: string | null
+  then: string[]
+  now: string[]
+  added: string[]
+  removed: string[]
+  drift: number | null
+  history: { tag: string; level: number; added: string; removed: string | null }[]
+}
+export type Insights = {
+  as_of: string
+  window_months: number
+  activity_count: number
+  cohort_size: number
+  series: { dates: string[]; scores: Record<string, number[]> }
+  competencies: CompetencyTrend[]
+  strengths: string[]
+  gaps: string[]
+  recommendations: Recommendation[]
+  timeline: TimelineEntry[]
+  interests: InterestDrift
+}
+
 export type Health = {
   status: string
   version: string
@@ -171,6 +223,7 @@ export const api = {
 
   competencies: (asOf?: string) => request<LearnerCompetencies>(`/me/competencies${asOf ? `?as_of=${asOf}` : ''}`),
   scoringConfig: () => request<ScoringConfig>('/competencies/config'),
+  insights: () => request<Insights>('/me/insights'),
 }
 
 /** Evidence files need the auth header, so fetch as a blob and open it in a new tab. */

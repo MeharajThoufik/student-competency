@@ -1,10 +1,11 @@
-import { Award, GraduationCap, LayoutDashboard, LogOut, Menu, Sparkles, UserRound, X } from 'lucide-react'
+import { Award, GraduationCap, LayoutDashboard, LogOut, Menu, Sparkles, TrendingUp, UserRound, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
 const NAV = [
   { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/app/growth', label: 'Growth', icon: TrendingUp },
   { to: '/app/activities', label: 'Activities', icon: Award },
   { to: '/app/academics', label: 'Academics', icon: GraduationCap },
   { to: '/app/skills', label: 'Skills & Interests', icon: Sparkles },

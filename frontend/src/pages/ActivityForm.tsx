@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, Trash2, Upload, X } from 'lucide-react'
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, Badge, Button, Card, EvidenceBadge, Field, Input, Select, Spinner, Textarea, titleCase } from '../components/ui'
-import { api, openEvidence, OUTCOMES, SCOPES, type Activity, type ActivityIn } from '../lib/api'
+import { api, openEvidence, OUTCOMES, SCOPES, type Activity, type ActivityIn, type ActivityType } from '../lib/api'
 
 const MAX_MB = 10
 const ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp'
@@ -20,8 +20,10 @@ export function ActivityForm() {
   return <Form key={id ?? 'new'} activity={existing.data} types={types.data ?? []} />
 }
 
-function Form({ activity, types }: { activity?: Activity; types: { id: number; label: string; description: string | null }[] }) {
+function Form({ activity, types }: { activity?: Activity; types: ActivityType[] }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const initialType = types.find((t) => t.key === params.get('type')) ?? types[0]
   const queryClient = useQueryClient()
   const fileInput = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<ActivityIn>(
@@ -38,7 +40,7 @@ function Form({ activity, types }: { activity?: Activity; types: { id: number; l
           skills: activity.skills,
           url: activity.url,
         }
-      : { type_id: types[0]?.id, title: '', description: null, organization: null, start_date: today(), end_date: null, outcome: 'participant', scope: 'institute', skills: [], url: null },
+      : { type_id: initialType?.id, title: '', description: null, organization: null, start_date: today(), end_date: null, outcome: 'participant', scope: 'institute', skills: [], url: null },
   )
   const [skillDraft, setSkillDraft] = useState('')
   const [pending, setPending] = useState<File[]>([])
@@ -48,6 +50,7 @@ function Form({ activity, types }: { activity?: Activity; types: { id: number; l
     queryClient.invalidateQueries({ queryKey: ['activities'] })
     queryClient.invalidateQueries({ queryKey: ['activity'] })
     queryClient.invalidateQueries({ queryKey: ['competencies'] })
+    queryClient.invalidateQueries({ queryKey: ['insights'] })
   }
 
   // Set once the activity exists, so a retry after a failed upload updates instead of creating a duplicate.

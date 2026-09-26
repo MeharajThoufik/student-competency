@@ -1,12 +1,13 @@
 """Bridges the database and the pure scoring engine."""
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Activity, ActivityType, Competency, CompetencySnapshot, MappingWeight
+from app.models import Activity, ActivityType, Competency, CompetencySnapshot, MappingWeight, Role, User
 from app.services.scoring import DEFAULT_PARAMS, ActivityInput, CompetencyScore, compute_scores, score_vector
 
 
@@ -61,6 +62,20 @@ def learner_scores(
 ) -> dict[str, CompetencyScore]:
     fw = framework or load_framework(db)
     return compute_scores(learner_inputs(db, user_id), fw.weights, fw.keys, as_of or date.today(), DEFAULT_PARAMS)
+
+
+def cohort_scores(db: Session, exclude_user_id: int, as_of: date, framework: Framework) -> list[dict[str, float]]:
+    """Current score vectors of every other learner with at least one activity (for percentiles)."""
+    q = (
+        select(Activity)
+        .join(User, User.id == Activity.user_id)
+        .where(User.role == Role.learner, Activity.user_id != exclude_user_id)
+    )
+    by_user: dict[int, list[ActivityInput]] = defaultdict(list)
+    for a in db.scalars(q):
+        by_user[a.user_id].append(to_input(a))
+    fw = framework
+    return [score_vector(compute_scores(acts, fw.weights, fw.keys, as_of, DEFAULT_PARAMS)) for acts in by_user.values()]
 
 
 def record_snapshot(db: Session, user_id: int, trigger: str, activity_id: int | None = None) -> CompetencySnapshot:

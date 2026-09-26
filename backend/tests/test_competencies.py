@@ -100,3 +100,42 @@ def test_synthetic_personas_follow_intended_trajectories(engine):
         assert mean("leader", "leadership") > mean("coder", "leadership")
         assert mean("researcher", "research") > mean("all_rounder", "research")
         assert mean("fading", "technical") < mean("coder", "technical")
+
+
+# ---------- P3 insights ----------
+def test_insights_empty_learner(client, learner):
+    body = client.get("/api/me/insights", headers=learner).json()
+    assert body["activity_count"] == 0
+    assert body["recommendations"] == [] and body["timeline"] == [] and body["strengths"] == []
+    assert len(body["series"]["dates"]) == 7
+    assert all(c["trend"] == "inactive" and c["percentile"] is None for c in body["competencies"])
+    assert body["interests"]["drift"] is None
+
+
+def test_insights_full(client, learner):
+    aid = _activity(client, learner, start_date="2026-05-01").json()["id"]
+    _activity(client, learner, title="Paper", start_date="2026-08-01")
+    client.post("/api/me/interests", headers=learner, json={"tag": "Cloud", "level": 4})
+    body = client.get("/api/me/insights", headers=learner).json()
+
+    assert body["activity_count"] == 2
+    tech = next(c for c in body["competencies"] if c["key"] == "technical")
+    assert tech["score"] > 0 and tech["percentile"] is None  # no other learners yet
+    assert body["series"]["scores"]["technical"][-1] == tech["score"]
+    assert "technical" in body["strengths"] or tech["score"] < 30
+    assert [t["activity_id"] for t in body["timeline"]][-1] == aid
+    assert body["timeline"][0]["deltas"]
+    assert any(r["kind"] == "evidence" for r in body["recommendations"])
+    assert body["interests"]["now"] == ["Cloud"] and body["interests"]["history"][0]["tag"] == "Cloud"
+
+
+def test_insights_percentile_against_other_learners(client, learner):
+    other = as_user("u2", "u2@x.com")
+    client.post("/api/me/consent", headers=other)
+    _activity(client, other)
+    _activity(client, learner)
+    _activity(client, learner, title="Second")
+    body = client.get("/api/me/insights", headers=learner).json()
+    assert body["cohort_size"] == 1
+    tech = next(c for c in body["competencies"] if c["key"] == "technical")
+    assert tech["percentile"] == 100
