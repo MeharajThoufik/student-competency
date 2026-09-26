@@ -1,16 +1,23 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
 from app.core.db import get_db
-from app.models import Role, User
+from app.models import ActivityType, AuditLog, Competency, MappingWeight, Role, User
+from app.models.seed import MAPPING_WEIGHTS
 from app.services import synthetic
+from app.services.audit import audit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_only = require_roles(Role.admin)
 
 
+# ---------- Synthetic learners ----------
 class SyntheticRequest(BaseModel):
     learners: int = Field(200, ge=1, le=1000)
     seed: int = 42
@@ -32,12 +39,161 @@ def get_synthetic(_: User = Depends(admin_only), db: Session = Depends(get_db)):
 
 
 @router.post("/synthetic", response_model=SyntheticSummary)
-def seed_synthetic(body: SyntheticRequest, _: User = Depends(admin_only), db: Session = Depends(get_db)):
+def seed_synthetic(body: SyntheticRequest, admin: User = Depends(admin_only), db: Session = Depends(get_db)):
     """Replace all synthetic learners with a fresh deterministic set."""
-    return _summary(synthetic.generate(db, learners=body.learners, seed=body.seed, months=body.months))
+    counts = synthetic.generate(db, learners=body.learners, seed=body.seed, months=body.months)
+    audit(db, admin, "synthetic_generated", "synthetic", None, **body.model_dump(), by_persona=counts)
+    db.commit()
+    return _summary(counts)
 
 
 @router.delete("/synthetic", response_model=SyntheticSummary)
-def clear_synthetic(_: User = Depends(admin_only), db: Session = Depends(get_db)):
-    synthetic.delete_synthetic(db)
+def clear_synthetic(admin: User = Depends(admin_only), db: Session = Depends(get_db)):
+    deleted = synthetic.delete_synthetic(db)
+    audit(db, admin, "synthetic_deleted", "synthetic", None, deleted=deleted)
+    db.commit()
     return _summary({})
+
+
+# ---------- Users and roles ----------
+class AdminUserOut(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    register_no: str | None
+    batch: str | None
+    consent_given_at: datetime | None
+    last_login_at: datetime | None
+
+
+class RoleIn(BaseModel):
+    role: Role
+
+
+@router.get("/users", response_model=list[AdminUserOut])
+def list_users(
+    q: str | None = Query(None, max_length=100),
+    role: Role | None = None,
+    _: User = Depends(admin_only),
+    db: Session = Depends(get_db),
+):
+    """Real accounts only (synthetic learners are managed as a set)."""
+    stmt = select(User).where(User.synthetic_persona.is_(None))
+    if role:
+        stmt = stmt.where(User.role == role)
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(User.name.ilike(like), User.email.ilike(like), User.register_no.ilike(like)))
+    return db.scalars(stmt.order_by(User.name).limit(500)).all()
+
+
+@router.patch("/users/{user_id}", response_model=AdminUserOut)
+def set_role(user_id: int, body: RoleIn, admin: User = Depends(admin_only), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None or user.synthetic_persona is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    if user.id == admin.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "You cannot change your own role")
+    if user.role != body.role:
+        audit(db, admin, "role_changed", "user", user.id, email=user.email, previous=user.role, new=body.role.value)
+        user.role = body.role
+        db.commit()
+    return user
+
+
+# ---------- Weight matrix ----------
+class WeightsIn(BaseModel):
+    """Partial update: {activity type key: {competency key: weight 0–1}}."""
+
+    weights: dict[str, dict[str, float]]
+
+
+def _weight_rows(db: Session) -> dict[tuple[str, str], MappingWeight]:
+    rows = db.execute(
+        select(ActivityType.key, Competency.key, MappingWeight)
+        .join(ActivityType, ActivityType.id == MappingWeight.activity_type_id)
+        .join(Competency, Competency.id == MappingWeight.competency_id)
+    ).all()
+    return {(t, c): mw for t, c, mw in rows}
+
+
+def _apply_weights(db: Session, admin: User, new: dict[str, dict[str, float]], action: str) -> dict[str, dict[str, float]]:
+    types = dict(db.execute(select(ActivityType.key, ActivityType.id)).all())
+    comps = dict(db.execute(select(Competency.key, Competency.id)).all())
+    rows = _weight_rows(db)
+    errors = []
+    for t, ws in new.items():
+        if t not in types:
+            errors.append(f"Unknown activity type '{t}'")
+            continue
+        for c, w in ws.items():
+            if c not in comps:
+                errors.append(f"Unknown competency '{c}'")
+            elif not 0 <= w <= 1:
+                errors.append(f"{t}/{c}: weight must be between 0 and 1")
+    if errors:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "; ".join(errors))
+
+    current = {t: {c: (rows[(t, c)].weight if (t, c) in rows else 0.0) for c in comps} for t in types}
+    merged = {t: {**current[t], **{c: round(w, 3) for c, w in new.get(t, {}).items()}} for t in types}
+    empty = [t for t, ws in merged.items() if not any(w > 0 for w in ws.values())]
+    if empty:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Every activity type needs a positive weight: {', '.join(empty)}")
+
+    changes: dict[str, dict[str, list[float]]] = {}
+    for t, ws in merged.items():
+        for c, w in ws.items():
+            if w == current[t][c]:
+                continue
+            changes.setdefault(t, {})[c] = [current[t][c], w]
+            if (t, c) in rows:
+                rows[(t, c)].weight = w
+            else:
+                db.add(MappingWeight(activity_type_id=types[t], competency_id=comps[c], weight=w))
+    if changes:
+        audit(db, admin, action, "mapping_weights", None, changes=changes)
+        db.commit()
+    return merged
+
+
+@router.put("/weights", response_model=dict[str, dict[str, float]])
+def update_weights(body: WeightsIn, admin: User = Depends(admin_only), db: Session = Depends(get_db)):
+    """Scores are computed on read, so every learner's scores update immediately. Past snapshots are kept as recorded."""
+    return _apply_weights(db, admin, body.weights, "weights_updated")
+
+
+@router.post("/weights/reset", response_model=dict[str, dict[str, float]])
+def reset_weights(admin: User = Depends(admin_only), db: Session = Depends(get_db)):
+    return _apply_weights(db, admin, MAPPING_WEIGHTS, "weights_reset")
+
+
+# ---------- Audit log ----------
+class AuditOut(BaseModel):
+    id: int
+    created_at: datetime
+    actor: str | None
+    action: str
+    target_type: str
+    target_id: int | None
+    details: dict[str, Any]
+
+
+@router.get("/audit", response_model=list[AuditOut])
+def audit_log(
+    limit: int = Query(100, ge=1, le=500),
+    action: str | None = None,
+    _: User = Depends(admin_only),
+    db: Session = Depends(get_db),
+):
+    stmt = select(AuditLog, User.email).outerjoin(User, User.id == AuditLog.actor_id)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    rows = db.execute(stmt.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(limit)).all()
+    return [
+        AuditOut(
+            id=a.id, created_at=a.created_at, actor=email, action=a.action,
+            target_type=a.target_type, target_id=a.target_id, details=a.details,
+        )  # fmt: skip
+        for a, email in rows
+    ]

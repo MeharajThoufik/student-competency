@@ -30,12 +30,10 @@ export function TrendBadge({ trend }: { trend: Trend }) {
 
 export function Growth() {
   const insights = useQuery({ queryKey: ['insights'], queryFn: api.insights })
-  const config = useQuery({ queryKey: ['scoring-config'], queryFn: api.scoringConfig, staleTime: Infinity })
 
   if (insights.isPending) return <Spinner />
   if (insights.error) return <Alert>{insights.error.message}</Alert>
   const data = insights.data
-  const typeLabel = (k: string) => config.data?.activity_types[k] ?? titleCase(k)
 
   return (
     <div className="space-y-6">
@@ -45,12 +43,27 @@ export function Growth() {
           How your competencies have changed over time. Trends compare the last {data.window_months} months · as of {data.as_of}
         </p>
       </div>
+      <GrowthView data={data} />
+    </div>
+  )
+}
 
+/** Growth analytics for one learner. `readOnly` (educator view) hides the learner's own action links. */
+export function GrowthView({ data, readOnly = false }: { data: Insights; readOnly?: boolean }) {
+  const config = useQuery({ queryKey: ['scoring-config'], queryFn: api.scoringConfig, staleTime: Infinity })
+  const typeLabel = (k: string) => config.data?.activity_types[k] ?? titleCase(k)
+
+  return (
+    <div className="space-y-6">
       {data.activity_count === 0 ? (
-        <Empty>
-          Your growth appears once you <Link to="/app/activities/new" className="font-medium underline">add activities</Link>. Past activities count
-          too: enter their real dates and your history is rebuilt from them.
-        </Empty>
+        readOnly ? (
+          <Empty>This learner has not recorded any activities yet.</Empty>
+        ) : (
+          <Empty>
+            Your growth appears once you <Link to="/app/activities/new" className="font-medium underline">add activities</Link>. Past activities count
+            too: enter their real dates and your history is rebuilt from them.
+          </Empty>
+        )
       ) : (
         <>
           <TrendGrid competencies={data.competencies} cohortSize={data.cohort_size} />
@@ -66,14 +79,14 @@ export function Growth() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <StrengthsGaps data={data} />
-            <Recommendations recs={data.recommendations} data={data} typeLabel={typeLabel} />
+            <Recommendations recs={data.recommendations} data={data} typeLabel={typeLabel} readOnly={readOnly} />
           </div>
 
-          <LearningTimeline data={data} typeLabel={typeLabel} />
+          <LearningTimeline data={data} typeLabel={typeLabel} readOnly={readOnly} />
         </>
       )}
 
-      <InterestDriftCard data={data} />
+      <InterestDriftCard data={data} readOnly={readOnly} />
     </div>
   )
 }
@@ -138,7 +151,7 @@ const REC_ICON: Record<Recommendation['kind'], ReactNode> = {
   evidence: <FileCheck2 className="size-4 text-sky-600" />,
 }
 
-function Recommendations({ recs, data, typeLabel }: { recs: Recommendation[]; data: Insights; typeLabel: (k: string) => string }) {
+function Recommendations({ recs, data, typeLabel, readOnly }: { recs: Recommendation[]; data: Insights; typeLabel: (k: string) => string; readOnly: boolean }) {
   const titles = Object.fromEntries(data.timeline.map((t) => [t.activity_id, t.title]))
   return (
     <Card title="Recommendations" action={<span className="text-xs text-slate-500">Most impact first</span>}>
@@ -157,6 +170,14 @@ function Recommendations({ recs, data, typeLabel }: { recs: Recommendation[]; da
                 <p className="mt-0.5 text-sm text-slate-600">{r.detail}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {r.kind !== 'evidence' &&
+                    readOnly &&
+                    r.activity_types.map((t) => (
+                      <span key={t} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                        {typeLabel(t)}
+                      </span>
+                    ))}
+                  {r.kind !== 'evidence' &&
+                    !readOnly &&
                     r.activity_types.map((t) => (
                       <Link
                         key={t}
@@ -167,11 +188,17 @@ function Recommendations({ recs, data, typeLabel }: { recs: Recommendation[]; da
                       </Link>
                     ))}
                   {r.kind === 'evidence' &&
-                    r.activity_ids.slice(0, 4).map((id) => (
-                      <Link key={id} to={`/app/activities/${id}`} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200">
-                        {titles[id] ?? `Activity ${id}`}
-                      </Link>
-                    ))}
+                    r.activity_ids.slice(0, 4).map((id) =>
+                      readOnly ? (
+                        <span key={id} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                          {titles[id] ?? `Activity ${id}`}
+                        </span>
+                      ) : (
+                        <Link key={id} to={`/app/activities/${id}`} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                          {titles[id] ?? `Activity ${id}`}
+                        </Link>
+                      ),
+                    )}
                   {r.kind === 'evidence' && r.activity_ids.length > 4 && (
                     <span className="px-1 py-1 text-xs text-slate-500">+{r.activity_ids.length - 4} more</span>
                   )}
@@ -185,7 +212,7 @@ function Recommendations({ recs, data, typeLabel }: { recs: Recommendation[]; da
   )
 }
 
-function LearningTimeline({ data, typeLabel }: { data: Insights; typeLabel: (k: string) => string }) {
+function LearningTimeline({ data, typeLabel, readOnly }: { data: Insights; typeLabel: (k: string) => string; readOnly: boolean }) {
   const [all, setAll] = useState(false)
   const labels = Object.fromEntries(data.competencies.map((c) => [c.key, c.label]))
   const entries = all ? data.timeline : data.timeline.slice(0, 10)
@@ -198,9 +225,13 @@ function LearningTimeline({ data, typeLabel }: { data: Insights; typeLabel: (k: 
             <li key={e.activity_id} className="relative">
               <span className="absolute -left-[25px] top-1.5 size-2.5 rounded-full border-2 border-white bg-slate-400" />
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <Link to={`/app/activities/${e.activity_id}`} className="text-sm font-medium hover:underline">
-                  {e.title}
-                </Link>
+                {readOnly ? (
+                  <span className="text-sm font-medium">{e.title}</span>
+                ) : (
+                  <Link to={`/app/activities/${e.activity_id}`} className="text-sm font-medium hover:underline">
+                    {e.title}
+                  </Link>
+                )}
                 {e.evidence_status === 'rejected' ? <Badge tone="red">Rejected</Badge> : <EvidenceBadge status={e.evidence_status} />}
               </div>
               <div className="text-xs text-slate-500">
@@ -228,14 +259,14 @@ function LearningTimeline({ data, typeLabel }: { data: Insights; typeLabel: (k: 
   )
 }
 
-function InterestDriftCard({ data }: { data: Insights }) {
+function InterestDriftCard({ data, readOnly }: { data: Insights; readOnly: boolean }) {
   const d = data.interests
   if (!d.history.length)
     return (
       <Card title="Interest drift">
         <p className="text-sm text-slate-500">
-          Add interests on the <Link to="/app/skills" className="font-medium underline">Skills & Interests</Link> page. As they change, this shows how your
-          focus is shifting.
+          {readOnly ? 'No interests recorded yet.' : <>Add interests on the <Link to="/app/skills" className="font-medium underline">Skills & Interests</Link> page. As they change, this shows how your
+          focus is shifting.</>}
         </p>
       </Card>
     )

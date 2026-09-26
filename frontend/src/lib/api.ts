@@ -145,6 +145,78 @@ export type Insights = {
   interests: InterestDrift
 }
 
+// ---------- Educator ----------
+export type Synthetic = 'exclude' | 'include' | 'only'
+export type LearnerRef = { id: number; name: string; email: string; register_no: string | null; batch: string | null; synthetic: boolean }
+export type ReviewQueue = { total: number; items: { learner: LearnerRef; activity: Activity }[] }
+export type LearnerSummary = {
+  learner: LearnerRef
+  activity_count: number
+  last_activity: string | null
+  pending_reviews: number
+  mean_score: number
+  top_competency: string | null
+  scores: Record<string, number>
+  trends: Record<string, Trend>
+  risks: string[]
+}
+export type LearnerList = { total: number; items: LearnerSummary[]; risk_rules: Record<string, string> }
+export type LearnerDetail = {
+  profile: User & { synthetic: boolean }
+  academics: AcademicSummary
+  skills: Skill[]
+  interests: Interest[]
+  activities: Activity[]
+  insights: Insights
+  risks: string[]
+  risk_rules: Record<string, string>
+}
+export type CompetencyDistribution = {
+  key: string
+  label: string
+  mean: number
+  minimum: number
+  p25: number
+  median: number
+  p75: number
+  maximum: number
+  trends: Record<Trend, number>
+}
+export type Cohort = {
+  as_of: string
+  learner_count: number
+  active_count: number
+  window_months: number
+  competencies: CompetencyDistribution[]
+  risk_counts: Record<string, number>
+  risk_rules: Record<string, string>
+  evidence: Record<string, number>
+  activity_types: { key: string; label: string; count: number }[]
+  batches: string[]
+}
+
+// ---------- Admin ----------
+export type AdminUser = {
+  id: number
+  name: string
+  email: string
+  role: Role
+  register_no: string | null
+  batch: string | null
+  consent_given_at: string | null
+  last_login_at: string | null
+}
+export type AuditEntry = {
+  id: number
+  created_at: string
+  actor: string | null
+  action: string
+  target_type: string
+  target_id: number | null
+  details: Record<string, unknown>
+}
+export type Weights = Record<string, Record<string, number>>
+
 export type Health = {
   status: string
   version: string
@@ -224,6 +296,24 @@ export const api = {
   competencies: (asOf?: string) => request<LearnerCompetencies>(`/me/competencies${asOf ? `?as_of=${asOf}` : ''}`),
   scoringConfig: () => request<ScoringConfig>('/competencies/config'),
   insights: () => request<Insights>('/me/insights'),
+
+  reviewQueue: (status: 'pending' | 'verified' | 'rejected', synthetic: Synthetic = 'exclude') =>
+    request<ReviewQueue>(`/educator/queue?${new URLSearchParams({ status, synthetic })}`),
+  review: (activityId: number, decision: 'verify' | 'reject', note: string | null) =>
+    request<Activity>(`/educator/activities/${activityId}/review`, json('POST', { decision, note })),
+  learners: (params: Record<string, string>) => request<LearnerList>(`/educator/learners?${new URLSearchParams(params)}`),
+  learner: (id: number) => request<LearnerDetail>(`/educator/learners/${id}`),
+  cohort: (params: Record<string, string>) => request<Cohort>(`/educator/cohort?${new URLSearchParams(params)}`),
+
+  adminUsers: (q: string) => request<AdminUser[]>(`/admin/users?${new URLSearchParams(q ? { q } : {})}`),
+  setRole: (id: number, role: Role) => request<AdminUser>(`/admin/users/${id}`, json('PATCH', { role })),
+  updateWeights: (weights: Weights) => request<Weights>('/admin/weights', json('PUT', { weights })),
+  resetWeights: () => request<Weights>('/admin/weights/reset', { method: 'POST' }),
+  audit: () => request<AuditEntry[]>('/admin/audit?limit=200'),
+  syntheticSummary: () => request<{ total: number; by_persona: Record<string, number> }>('/admin/synthetic'),
+  generateSynthetic: (learners: number, seed: number) =>
+    request<{ total: number; by_persona: Record<string, number> }>('/admin/synthetic', json('POST', { learners, seed })),
+  clearSynthetic: () => request<{ total: number }>('/admin/synthetic', { method: 'DELETE' }),
 }
 
 /** Evidence files need the auth header, so fetch as a blob and open it in a new tab. */

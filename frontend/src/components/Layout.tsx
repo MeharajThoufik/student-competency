@@ -1,37 +1,61 @@
-import { Award, GraduationCap, LayoutDashboard, LogOut, Menu, Sparkles, TrendingUp, UserRound, X } from 'lucide-react'
+import { Award, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut, Menu, PieChart, Settings, Sparkles, TrendingUp, UserRound, Users, X } from 'lucide-react'
+import type { Role } from '../lib/api'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
-const NAV = [
-  { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/app/growth', label: 'Growth', icon: TrendingUp },
-  { to: '/app/activities', label: 'Activities', icon: Award },
-  { to: '/app/academics', label: 'Academics', icon: GraduationCap },
-  { to: '/app/skills', label: 'Skills & Interests', icon: Sparkles },
-  { to: '/app/profile', label: 'Profile', icon: UserRound },
+type NavItem = { to: string; label: string; icon: typeof Award; end?: boolean }
+type NavSection = { title?: string; roles?: Role[]; items: NavItem[] }
+
+const SECTIONS: NavSection[] = [
+  {
+    items: [
+      { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
+      { to: '/app/growth', label: 'Growth', icon: TrendingUp },
+      { to: '/app/activities', label: 'Activities', icon: Award },
+      { to: '/app/academics', label: 'Academics', icon: GraduationCap },
+      { to: '/app/skills', label: 'Skills & Interests', icon: Sparkles },
+      { to: '/app/profile', label: 'Profile', icon: UserRound },
+    ],
+  },
+  {
+    title: 'Educator',
+    roles: ['educator', 'admin'],
+    items: [
+      { to: '/app/educator/queue', label: 'Review queue', icon: ClipboardCheck },
+      { to: '/app/educator/learners', label: 'Learners', icon: Users },
+      { to: '/app/educator/cohort', label: 'Cohort analytics', icon: PieChart },
+    ],
+  },
+  { title: 'Admin', roles: ['admin'], items: [{ to: '/app/admin', label: 'Administration', icon: Settings }] },
 ]
 
 export function Layout() {
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
 
+  const sections = SECTIONS.filter((s) => !s.roles || (user && s.roles.includes(user.role)))
   const nav = (
     <nav className="flex flex-col gap-1">
-      {NAV.map(({ to, label, icon: Icon, end }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={end}
-          onClick={() => setOpen(false)}
-          className={({ isActive }) =>
-            `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
-              isActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
-            }`
-          }
-        >
-          <Icon className="size-4" /> {label}
-        </NavLink>
+      {sections.map((section, i) => (
+        <div key={i} className={`flex flex-col gap-1 ${i ? 'mt-4' : ''}`}>
+          {section.title && <div className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{section.title}</div>}
+          {section.items.map(({ to, label, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              onClick={() => setOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+                  isActive ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                }`
+              }
+            >
+              <Icon className="size-4" /> {label}
+            </NavLink>
+          ))}
+        </div>
       ))}
     </nav>
   )

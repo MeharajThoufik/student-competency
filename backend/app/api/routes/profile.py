@@ -50,7 +50,11 @@ def list_academics(user: User = Depends(require_consent), db: Session = Depends(
 
 @router.get("/academics/summary", response_model=AcademicSummary)
 def academic_summary(user: User = Depends(require_consent), db: Session = Depends(get_db)) -> AcademicSummary:
-    records = db.scalars(select(AcademicRecord).where(AcademicRecord.user_id == user.id)).all()
+    return academic_summary_for(db, user.id)
+
+
+def academic_summary_for(db: Session, user_id: int) -> AcademicSummary:
+    records = db.scalars(select(AcademicRecord).where(AcademicRecord.user_id == user_id)).all()
     by_sem: dict[int, list[AcademicRecord]] = defaultdict(list)
     for r in records:
         by_sem[r.semester].append(r)

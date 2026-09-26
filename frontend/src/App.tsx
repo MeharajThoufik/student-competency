@@ -1,7 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth } from './auth/guards'
+import { RequireRole } from './components/educator'
 import { Layout } from './components/Layout'
 import { Academics } from './pages/Academics'
+import { Admin } from './pages/admin/Admin'
+import { Cohort } from './pages/educator/Cohort'
+import { LearnerDetail } from './pages/educator/LearnerDetail'
+import { Learners } from './pages/educator/Learners'
+import { ReviewQueue } from './pages/educator/ReviewQueue'
 import { Activities } from './pages/Activities'
 import { ActivityForm } from './pages/ActivityForm'
 import { Consent } from './pages/Consent'
@@ -35,6 +41,11 @@ export default function App() {
           <Route path="academics" element={<Academics />} />
           <Route path="skills" element={<SkillsInterests />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="educator/queue" element={<RequireRole roles={['educator', 'admin']}><ReviewQueue /></RequireRole>} />
+          <Route path="educator/learners" element={<RequireRole roles={['educator', 'admin']}><Learners /></RequireRole>} />
+          <Route path="educator/learners/:id" element={<RequireRole roles={['educator', 'admin']}><LearnerDetail /></RequireRole>} />
+          <Route path="educator/cohort" element={<RequireRole roles={['educator', 'admin']}><Cohort /></RequireRole>} />
+          <Route path="admin" element={<RequireRole roles={['admin']}><Admin /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

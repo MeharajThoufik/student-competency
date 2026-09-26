@@ -83,19 +83,23 @@ class InsightsOut(BaseModel):
 
 @router.get("/me/insights", response_model=InsightsOut)
 def my_insights(user: User = Depends(require_consent), db: Session = Depends(get_db)) -> InsightsOut:
+    return build_insights(db, user.id)
+
+
+def build_insights(db: Session, user_id: int) -> InsightsOut:
     today = date.today()
     fw = load_framework(db)
     keys, labels = fw.keys, {c.key: c.label for c in fw.competencies}
     type_labels = dict(db.execute(select(ActivityType.key, ActivityType.label)).all())
-    activities = learner_inputs(db, user.id)
+    activities = learner_inputs(db, user_id)
 
     series = analytics.monthly_series(activities, fw.weights, keys, today)
     trend_by_key = analytics.trends(series)
     current = {k: t.score for k, t in trend_by_key.items()}
     strengths, gaps = analytics.strengths_and_gaps(current) if activities else ([], [])
-    cohort = cohort_scores(db, user.id, today, fw)
+    cohort = cohort_scores(db, user_id, today, fw)
 
-    interests = db.scalars(select(Interest).where(Interest.user_id == user.id).order_by(Interest.created_at)).all()
+    interests = db.scalars(select(Interest).where(Interest.user_id == user_id).order_by(Interest.created_at)).all()
     records = [analytics.InterestRecord(i.tag, i.level, _utc(i.created_at), _utc(i.removed_at)) for i in interests]
     drift = analytics.interest_drift(records, datetime.now(UTC))
 
