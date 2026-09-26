@@ -9,14 +9,15 @@ from dataclasses import replace
 from datetime import date
 
 import numpy as np
-from scipy.stats import spearmanr
+from scipy.stats import kendalltau, spearmanr
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score, silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-from app.evaluation.data import EVAL_DATE, KEYS, TYPE_KEYS, Learner
+from app.evaluation.data import EVAL_DATE, KEYS, LABELS, TYPE_KEYS, Learner
 from app.models.seed import MAPPING_WEIGHTS
 from app.services import analytics
+from app.services import clustering as grouping_service
 from app.services.analytics import TrendParams, add_months
 from app.services.scoring import DEFAULT_PARAMS, ScoringParams, compute_scores
 
@@ -231,17 +232,18 @@ def sensitivity(test: list[list[Learner]], levels=(0.1, 0.2, 0.3), runs: int = 2
         rows = []
         for _ in range(runs):
             w = perturb(MAPPING_WEIGHTS, level, rng)
-            spearman, top1, agree, bacc = [], [], [], []
+            spearman, kendall, top1, agree, bacc = [], [], [], [], []
             for data, series, labels in base:
                 pseries = [score_series(learner, points, weights=w) for learner in data]
                 plabels = [trend_labels(s, trend) for s in pseries]
                 now = np.array([[s[k][-1] for k in KEYS] for s in series])
                 pnow = np.array([[s[k][-1] for k in KEYS] for s in pseries])
                 spearman.append(statistics.fmean(float(spearmanr(now[:, j], pnow[:, j]).statistic) for j in range(len(KEYS))))
+                kendall.append(statistics.fmean(float(kendalltau(now[:, j], pnow[:, j]).statistic) for j in range(len(KEYS))))
                 top1.append(float(np.mean(now.argmax(1) == pnow.argmax(1))))
                 agree.append(statistics.fmean(a[k] == b[k] for a, b in zip(labels, plabels, strict=True) for k in KEYS))
                 bacc.append(recovery(data, plabels)["balanced_accuracy"])
-            rows.append({k: statistics.fmean(v) for k, v in {"spearman": spearman, "top1": top1, "trend_agreement": agree, "balanced_accuracy": bacc}.items()})
+            rows.append({k: statistics.fmean(v) for k, v in {"spearman": spearman, "kendall": kendall, "top1": top1, "trend_agreement": agree, "balanced_accuracy": bacc}.items()})
         out[f"{level:g}"] = {
             m: {"mean": statistics.fmean(r[m] for r in rows), "min": min(r[m] for r in rows), "max": max(r[m] for r in rows)}
             for m in rows[0]
@@ -275,3 +277,45 @@ def scalability(data: list[Learner], sizes=(200, 500, 1000)) -> dict:
     out["insights_ms_per_learner"] = round(1000 * (time.perf_counter() - t0) / len(sample), 1)
     out["mean_activities"] = round(statistics.fmean(len(learner.activities) for learner in data), 1)
     return out
+
+
+# ---------- E3b: in-app grouping (production clustering service) ----------
+def grouping_validation(test: list[list[Learner]]) -> dict:
+    """Runs app.services.clustering exactly as the Learner groups page does, on held-out data."""
+    settings: dict[str, list] = {"auto": [], "k5": []}
+    moved: dict[str, list[bool]] = {p: [] for p in PERSONAS}
+    for data in test:
+        histories = [grouping_service.LearnerHistory(learner.id, learner.activities, learner.persona) for learner in data]
+        for key, k in (("auto", None), ("k5", 5)):
+            t0 = time.perf_counter()
+            g = grouping_service.group_learners(histories, MAPPING_WEIGHTS, KEYS, LABELS, EVAL_DATE, k=k)
+            settings[key].append({"k": g.k, "seconds": time.perf_counter() - t0, "algorithms": g.algorithms, "movement": g.movement_rate})
+            if key == "k5":
+                for learner in data:
+                    s = g.assignments[learner.id]
+                    if s[0] != grouping_service.INACTIVE and s[-1] != grouping_service.INACTIVE:
+                        moved[learner.persona].append(s[0] != s[-1])
+
+    def summary(runs: list[dict]) -> dict:
+        names = [a.name.split(" (")[0] for a in runs[0]["algorithms"]]
+        algos = {}
+        for i, name in enumerate(names):
+            vals = [r["algorithms"][i] for r in runs]
+
+            def mean(attr: str) -> float:
+                present = [getattr(v, attr) for v in vals if getattr(v, attr) is not None]
+                return statistics.fmean(present) if present else float("nan")
+
+            algos[name] = {m: mean(m) for m in ("silhouette", "davies_bouldin", "ari", "nmi", "noise", "n_clusters")}
+        return {
+            "k": [r["k"] for r in runs],
+            "seconds": statistics.fmean(r["seconds"] for r in runs),
+            "movement_rate": statistics.fmean(r["movement"] for r in runs),
+            "algorithms": algos,
+        }
+
+    return {
+        "auto": summary(settings["auto"]),
+        "k5": summary(settings["k5"]),
+        "movement_by_persona": {p: statistics.fmean(v) for p, v in moved.items() if v},
+    }

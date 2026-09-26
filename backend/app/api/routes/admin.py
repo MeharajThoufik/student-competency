@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from scipy.stats import kendalltau
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,9 @@ from app.models import ActivityType, AuditLog, Competency, MappingWeight, Role, 
 from app.models.seed import MAPPING_WEIGHTS
 from app.services import synthetic
 from app.services.audit import audit
+from app.services.cohort import activities_by_user, learner_query
+from app.services.competency import load_framework, to_input
+from app.services.scoring import compute_scores
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 admin_only = require_roles(Role.admin)
@@ -118,7 +122,8 @@ def _weight_rows(db: Session) -> dict[tuple[str, str], MappingWeight]:
     return {(t, c): mw for t, c, mw in rows}
 
 
-def _apply_weights(db: Session, admin: User, new: dict[str, dict[str, float]], action: str) -> dict[str, dict[str, float]]:
+def _merge(db: Session, new: dict[str, dict[str, float]]):
+    """Validate a partial update and merge it into the current matrix (nothing is written)."""
     types = dict(db.execute(select(ActivityType.key, ActivityType.id)).all())
     comps = dict(db.execute(select(Competency.key, Competency.id)).all())
     rows = _weight_rows(db)
@@ -140,7 +145,11 @@ def _apply_weights(db: Session, admin: User, new: dict[str, dict[str, float]], a
     empty = [t for t, ws in merged.items() if not any(w > 0 for w in ws.values())]
     if empty:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Every activity type needs a positive weight: {', '.join(empty)}")
+    return types, comps, rows, current, merged
 
+
+def _apply_weights(db: Session, admin: User, new: dict[str, dict[str, float]], action: str) -> dict[str, dict[str, float]]:
+    types, comps, rows, current, merged = _merge(db, new)
     changes: dict[str, dict[str, list[float]]] = {}
     for t, ws in merged.items():
         for c, w in ws.items():
@@ -161,6 +170,62 @@ def _apply_weights(db: Session, admin: User, new: dict[str, dict[str, float]], a
 def update_weights(body: WeightsIn, admin: User = Depends(admin_only), db: Session = Depends(get_db)):
     """Scores are computed on read, so every learner's scores update immediately. Past snapshots are kept as recorded."""
     return _apply_weights(db, admin, body.weights, "weights_updated")
+
+
+class CompetencyImpact(BaseModel):
+    key: str
+    label: str
+    kendall_tau: float | None  # rank agreement of learners, current vs draft (1 = same order)
+    mean_change: float
+    max_abs_change: float
+
+
+class WeightImpact(BaseModel):
+    learners: int
+    changed_weights: int
+    mean_kendall_tau: float | None
+    top_changed: int  # learners whose strongest competency would change
+    competencies: list[CompetencyImpact]
+
+
+@router.post("/weights/preview", response_model=WeightImpact)
+def preview_weights(body: WeightsIn, _: User = Depends(admin_only), db: Session = Depends(get_db)) -> WeightImpact:
+    """What a weight change would do to every learner's current scores, without saving it."""
+    _, _, _, current, merged = _merge(db, body.weights)
+    changed = sum(merged[t][c] != current[t][c] for t in merged for c in merged[t])
+    fw = load_framework(db)
+    today = date.today()
+    users = list(db.scalars(learner_query(synthetic="include")))
+    histories = [[to_input(a) for a in acts] for acts in activities_by_user(db, users).values() if acts]
+
+    before = [compute_scores(h, current, fw.keys, today) for h in histories]
+    after = [compute_scores(h, merged, fw.keys, today) for h in histories]
+    items, taus = [], []
+    for c in fw.competencies:
+        a = [s[c.key].score for s in before]
+        b = [s[c.key].score for s in after]
+        diffs = [y - x for x, y in zip(a, b, strict=True)]
+        tau = kendalltau(a, b).statistic if len(a) > 1 else float("nan")
+        tau = None if tau != tau else round(float(tau), 4)  # NaN when scores are constant
+        if tau is not None:
+            taus.append(tau)
+        items.append(
+            CompetencyImpact(
+                key=c.key,
+                label=c.label,
+                kendall_tau=tau,
+                mean_change=round(sum(diffs) / len(diffs), 2) if diffs else 0.0,
+                max_abs_change=round(max((abs(d) for d in diffs), default=0.0), 2),
+            )
+        )
+    top = lambda s: max(fw.keys, key=lambda k: s[k].score)  # noqa: E731
+    return WeightImpact(
+        learners=len(histories),
+        changed_weights=changed,
+        mean_kendall_tau=round(sum(taus) / len(taus), 4) if taus else None,
+        top_changed=sum(top(x) != top(y) for x, y in zip(before, after, strict=True)),
+        competencies=items,
+    )
 
 
 @router.post("/weights/reset", response_model=dict[str, dict[str, float]])

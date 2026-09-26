@@ -216,6 +216,30 @@ export type AuditEntry = {
   details: Record<string, unknown>
 }
 export type Weights = Record<string, Record<string, number>>
+export type WeightImpact = {
+  learners: number
+  changed_weights: number
+  mean_kendall_tau: number | null
+  top_changed: number
+  competencies: { key: string; label: string; kendall_tau: number | null; mean_change: number; max_abs_change: number }[]
+}
+
+// ---------- Learner groups (P5) ----------
+export type Grouping = {
+  as_of: string
+  period_dates: string[]
+  features: string
+  k: number
+  k_selection: { k: number; silhouette: number; davies_bouldin: number; inertia: number }[]
+  algorithms: { name: string; n_clusters: number; noise: number; silhouette: number | null; davies_bouldin: number | null; ari: number | null; nmi: number | null }[]
+  groups: { id: number; name: string; description: string; size: number; defining: string[]; mean_scores: Record<string, number>; lift: Record<string, number> }[]
+  members: { learner: LearnerRef; states: number[]; position: [number, number] | null }[]
+  pca_explained: number[]
+  transitions: { source: number; target: number; learners: number }[][]
+  movement_rate: number | null
+  persona_agreement: { ari: number; nmi: number; contingency: Record<string, Record<string, number>> } | null
+  notes: string[]
+}
 
 export type Health = {
   status: string
@@ -314,6 +338,22 @@ export const api = {
   generateSynthetic: (learners: number, seed: number) =>
     request<{ total: number; by_persona: Record<string, number> }>('/admin/synthetic', json('POST', { learners, seed })),
   clearSynthetic: () => request<{ total: number }>('/admin/synthetic', { method: 'DELETE' }),
+  previewWeights: (weights: Weights) => request<WeightImpact>('/admin/weights/preview', json('POST', { weights })),
+  groups: (params: Record<string, string>) => request<Grouping>(`/educator/groups?${new URLSearchParams(params)}`),
+}
+
+/** Download an authenticated file (e.g. a PDF report) using the name the server suggests. */
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const token = await auth.currentUser?.getIdToken()
+  const res = await fetch(`/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) throw new ApiError(res.status, await errorMessage(res))
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? fallbackName
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
 /** Evidence files need the auth header, so fetch as a blob and open it in a new tab. */

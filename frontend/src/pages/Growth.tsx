@@ -3,11 +3,12 @@ import { ArrowDownRight, ArrowUpRight, CircleDashed, FileCheck2, Lightbulb, Minu
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { CompetencyLineChart, monthLabel, ThenNowRadar } from '../components/GrowthCharts'
+import { ReportButton } from '../components/ReportButton'
 import { Alert, Badge, Card, Empty, EvidenceBadge, Spinner, titleCase } from '../components/ui'
 import { api, type CompetencyTrend, type Insights, type Recommendation, type Trend } from '../lib/api'
 
 const fmt = (n: number) => n.toFixed(1)
-const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n).toFixed(1)}`
+const signed = (n: number) => (Math.abs(n) < 0.05 ? '±0.0' : `${n > 0 ? '+' : '−'}${Math.abs(n).toFixed(1)}`)
 
 const TRENDS: Record<Trend, { label: string; tone: 'green' | 'blue' | 'gray' | 'red'; icon: typeof TrendingUp; hint: string }> = {
   emerging: { label: 'Emerging', tone: 'blue', icon: Sparkles, hint: 'Newly developing: low at the start of the window, now established' },
@@ -37,11 +38,14 @@ export function Growth() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Growth</h1>
-        <p className="text-sm text-slate-500">
-          How your competencies have changed over time. Trends compare the last {data.window_months} months · as of {data.as_of}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Growth</h1>
+          <p className="text-sm text-slate-500">
+            How your competencies have changed over time. Trends compare the last {data.window_months} months · as of {data.as_of}
+          </p>
+        </div>
+        <ReportButton />
       </div>
       <GrowthView data={data} />
     </div>

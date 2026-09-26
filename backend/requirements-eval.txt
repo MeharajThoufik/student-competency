@@ -1,6 +1,3 @@
 -r requirements-dev.txt
 # Offline evaluation only (python -m app.evaluation.run); not installed in the API image.
-numpy>=2.1
-scipy>=1.14
-scikit-learn>=1.5
 matplotlib>=3.9

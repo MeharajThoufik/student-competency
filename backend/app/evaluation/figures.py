@@ -154,6 +154,7 @@ def sensitivity(res: dict, out: Path) -> str:
     x = [float(level) * 100 for level in levels]
     metrics = {
         "spearman": "Score rank correlation (Spearman)",
+        "kendall": "Score rank correlation (Kendall's tau)",
         "top1": "Same strongest competency",
         "trend_agreement": "Same trend label",
         "balanced_accuracy": "Persona trend recovery (bal. acc.)",
@@ -170,3 +171,33 @@ def sensitivity(res: dict, out: Path) -> str:
     ax.set_title(f"Robustness to weight changes ({res['runs']} runs per level; band = min–max)")
     ax.legend(loc="lower left", fontsize=8)
     return _save(fig, out, "fig5_weight_sensitivity.png")
+
+
+def grouping(res: dict, out: Path) -> str:
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(9.2, 3.4), gridspec_kw={"width_ratios": [3, 2]})
+    algos = list(res["k5"]["algorithms"])
+    y = np.arange(len(algos))
+    for off, key, label, c in ((-0.19, "k5", "k = 5 (number of personas)", SERIES[0]), (0.19, "auto", "k chosen by silhouette", SERIES[1])):
+        vals = [res[key]["algorithms"][a]["ari"] for a in algos]
+        ax.barh(y + off, vals, height=0.36, color=c, label=label)
+        for yy, v in zip(y, vals, strict=True):
+            ax.text(v + 0.01, yy + off, f"{v:.2f}", va="center", fontsize=7.5, color=INK2)
+    ax.set_yticks(y, algos)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1.1)
+    ax.set_xlabel("Adjusted Rand Index vs personas")
+    ax.grid(axis="y", visible=False)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.25), ncol=2)
+    ax.set_title("In-app grouping (production code), held-out data", fontsize=9)
+
+    mv = res["movement_by_persona"]
+    ps = [p for p in PERSONAS if p in mv]
+    ax2.bar([PERSONA_LABEL[p] for p in ps], [mv[p] for p in ps], color=SERIES[0], width=0.6)
+    for i, p in enumerate(ps):
+        ax2.text(i, mv[p] + 0.02, f"{100 * mv[p]:.0f}%", ha="center", fontsize=8, color=INK2)
+    ax2.set_ylim(0, 1.1)
+    ax2.set_yticks([0, 0.25, 0.5, 0.75, 1], ["0%", "25%", "50%", "75%", "100%"])
+    ax2.tick_params(axis="x", labelsize=8, rotation=30)
+    ax2.grid(axis="x", visible=False)
+    ax2.set_title("Changed group over 12 months (k = 5)", fontsize=9)
+    return _save(fig, out, "fig6_grouping.png")

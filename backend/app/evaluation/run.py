@@ -5,6 +5,7 @@
 """
 
 import argparse
+import statistics
 import json
 import math
 import platform
@@ -69,6 +70,9 @@ def main() -> None:
     log("E3 clustering")
     results["clustering"] = ex.clustering(test)
 
+    log("E3b in-app grouping")
+    results["grouping"] = ex.grouping_validation(test)
+
     log("E4 sensitivity")
     results["sensitivity"] = ex.sensitivity(test, runs=3 if args.quick else 20)
 
@@ -84,6 +88,7 @@ def main() -> None:
         figures.sweep(results["sweep"], out),
         figures.clustering(results["clustering"], out),
         figures.sensitivity(results["sensitivity"], out),
+        figures.grouping(results["grouping"], out),
     ]
     results["meta"]["runtime_s"] = round(time.perf_counter() - started, 1)
     (out / "results.json").write_text(json.dumps(results, indent=2, default=_json))
@@ -100,6 +105,7 @@ def _json(o):
 # ---------- report ----------
 def findings(r: dict) -> list[str]:
     s, td, tt = r["sweep"], r["trend_default"], r["trend_tuned"]
+    gr = r["grouping"]
     b, fs = s["best"], r["clustering"]["feature_sets"]
     hl = s["by_half_life_test"]
     lv = r["sensitivity"]["levels"]
@@ -118,11 +124,16 @@ def findings(r: dict) -> list[str]:
         f"scores gives ARI {fs['competency_now']['ari']:.2f}, while the profile shape reaches {fs['competency_shape']['ari']:.2f}, close to "
         f"the activity-count baseline ({fs['activity_counts']['ari']:.2f}). Time-bucketed raw counts do best "
         f"({fs['activity_counts_by_half_year']['ari']:.2f}), as the personas are defined by timing patterns.",
-        f"4. **Results are robust to the expert weights.** With every weight perturbed by up to ±{float(max(lv, key=float)) * 100:g}%, score "
-        f"rankings keep a Spearman correlation of {worst['spearman']['min']:.2f} or more, {100 * worst['trend_agreement']['mean']:.0f}% of trend "
+        f"4. **In-app groups and their movement are meaningful.** The production grouping (K-Means, k = 5) reaches ARI "
+        f"{gr['k5']['algorithms']['K-Means']['ari']:.2f} against the personas (Agglomerative "
+        f"{gr['k5']['algorithms']['Agglomerative']['ari']:.2f}, DBSCAN {gr['k5']['algorithms']['DBSCAN']['ari']:.2f}); "
+        f"{100 * gr['movement_by_persona'].get('researcher', 0):.0f}% of researchers change group over the year as their research "
+        f"emerges, against {100 * statistics.fmean(v for p, v in gr['movement_by_persona'].items() if p != 'researcher'):.0f}% of other learners.",
+        f"5. **Results are robust to the expert weights.** With every weight perturbed by up to ±{float(max(lv, key=float)) * 100:g}%, score "
+        f"rankings keep a Spearman correlation of {worst['spearman']['min']:.2f} or more (Kendall's τ ≥ {worst['kendall']['min']:.2f}), {100 * worst['trend_agreement']['mean']:.0f}% of trend "
         f"labels are unchanged and persona recovery stays at {worst['balanced_accuracy']['mean']:.2f}. The single *strongest* competency is "
         f"the least stable output ({100 * worst['top1']['mean']:.0f}% unchanged) because of near-ties.",
-        f"5. **It scales comfortably for a department.** Full insights for one learner take {sc['insights_ms_per_learner']} ms; the cohort "
+        f"6. **It scales comfortably for a department.** Full insights for one learner take {sc['insights_ms_per_learner']} ms; the cohort "
         f"view for {big} learners needs {sc[big]['cohort_trends_s']:.1f} s of computation.",
     ]
 
@@ -139,6 +150,7 @@ def report(r: dict) -> str:
     m, d, s = r["meta"], r["dataset"], r["sweep"]
     td, tt = r["trend_default"], r["trend_tuned"]
     cl, se, sc = r["clustering"], r["sensitivity"], r["scalability"]
+    gr = r["grouping"]
     best = s["best"]
     lines = [
         "# Evaluation of the Competency Evolution Framework",
@@ -232,17 +244,44 @@ def report(r: dict) -> str:
         "",
         f"![Clustering]({r['figures'][3]})",
         "",
+        "### 3b. In-app learner groups (production code)",
+        "",
+        "The Learner groups page (`app/services/clustering.py`) is run unchanged on the held-out datasets: features are profile "
+        "shape + volume, K-Means is fitted on three periods pooled (12 and 6 months ago, now), and Agglomerative (Ward) and "
+        "DBSCAN are compared on the current period.",
+        "",
+        "| Algorithm | ARI (k = 5) | NMI (k = 5) | ARI (auto k) | Silhouette (auto k) | Davies–Bouldin (auto k) | Unassigned (auto k) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        *[
+            f"| {name} | {gr['k5']['algorithms'][name]['ari']:.3f} | {gr['k5']['algorithms'][name]['nmi']:.3f} | "
+            f"{gr['auto']['algorithms'][name]['ari']:.3f} | {gr['auto']['algorithms'][name]['silhouette']:.3f} | "
+            f"{gr['auto']['algorithms'][name]['davies_bouldin']:.3f} | {100 * gr['auto']['algorithms'][name]['noise']:.0f}% |"
+            for name in gr["k5"]["algorithms"]
+        ],
+        "",
+        f"Silhouette chose k = {', '.join(map(str, gr['auto']['k']))} on the held-out datasets. One grouping takes "
+        f"{gr['auto']['seconds']:.2f} s for {m['learners_per_dataset']} learners.",
+        "",
+        "Share of learners whose group changed between 12 months ago and now (k = 5), a check of the transition analysis:",
+        "",
+        "| Persona | Changed group |",
+        "|---|---:|",
+        *[f"| {P[p]} | {pct(v)} |" for p, v in gr["movement_by_persona"].items()],
+        "",
+        f"![In-app grouping]({r['figures'][5]})",
+        "",
         "## 4. Sensitivity to the weight matrix (E4)",
         "",
         f"Every non-zero weight is multiplied by a random factor in [1 − x, 1 + x] ({se['runs']} runs per level, both held-out "
         "datasets). Scores are compared with the unperturbed model.",
         "",
-        "| Perturbation | Score rank correlation | Same strongest competency | Same trend label | Persona recovery (bal. acc.) |",
-        "|---|---:|---:|---:|---:|",
+        "| Perturbation | Spearman ρ | Kendall's τ | Same strongest competency | Same trend label | Persona recovery (bal. acc.) |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
     for lv, v in se["levels"].items():
         lines.append(
-            f"| ±{float(lv) * 100:g}% | {v['spearman']['mean']:.3f} (min {v['spearman']['min']:.3f}) | {pct(v['top1']['mean'])} | "
+            f"| ±{float(lv) * 100:g}% | {v['spearman']['mean']:.3f} (min {v['spearman']['min']:.3f}) | "
+            f"{v['kendall']['mean']:.3f} (min {v['kendall']['min']:.3f}) | {pct(v['top1']['mean'])} | "
             f"{pct(v['trend_agreement']['mean'])} | {v['balanced_accuracy']['mean']:.3f} (min {v['balanced_accuracy']['min']:.3f}) |"
         )
     lines += [

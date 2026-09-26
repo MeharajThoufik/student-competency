@@ -15,10 +15,10 @@ from app.core.auth import require_roles
 from app.core.db import get_db
 from app.models import Activity, ActivityType, Interest, Role, Skill, User
 from app.schemas import AcademicSummary, ActivityOut, InterestOut, SkillOut, UserOut
-from app.services import analytics
+from app.services import analytics, clustering
 from app.services.audit import audit
-from app.services.cohort import RISK_RULES, SyntheticFilter, distribution, learner_query, learner_rows
-from app.services.competency import load_framework, record_snapshot
+from app.services.cohort import RISK_RULES, SyntheticFilter, activities_by_user, distribution, learner_query, learner_rows
+from app.services.competency import load_framework, record_snapshot, to_input
 
 router = APIRouter(prefix="/educator", tags=["educator"])
 staff = require_roles(Role.educator, Role.admin)
@@ -285,4 +285,105 @@ def cohort(
         evidence={k: evidence.get(k, 0) for k in ("self_reported", "evidence_attached", "verified", "rejected")},
         activity_types=[CountOut(key=k, label=type_labels.get(k, k), count=n) for k, n in types.most_common()],
         batches=sorted(b for b in db.scalars(batch_stmt) if b),
+    )
+
+
+# ---------- Learner groups (P5) ----------
+class KChoiceOut(BaseModel):
+    k: int
+    silhouette: float
+    davies_bouldin: float
+    inertia: float
+
+
+class AlgorithmOut(BaseModel):
+    name: str
+    n_clusters: int
+    noise: float
+    silhouette: float | None
+    davies_bouldin: float | None
+    ari: float | None
+    nmi: float | None
+
+
+class GroupOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    size: int
+    defining: list[str]
+    mean_scores: dict[str, float]
+    lift: dict[str, float]
+
+
+class GroupMember(BaseModel):
+    learner: LearnerRef
+    states: list[int]  # group id per period, -1 = not active yet
+    position: tuple[float, float] | None  # PCA, current period
+
+
+class TransitionCount(BaseModel):
+    source: int
+    target: int
+    learners: int
+
+
+class PersonaAgreement(BaseModel):
+    ari: float
+    nmi: float
+    contingency: dict[str, dict[str, int]]
+
+
+class GroupingOut(BaseModel):
+    as_of: date
+    period_dates: list[date]
+    features: str
+    k: int
+    k_selection: list[KChoiceOut]
+    algorithms: list[AlgorithmOut]
+    groups: list[GroupOut]
+    members: list[GroupMember]
+    pca_explained: list[float]
+    transitions: list[list[TransitionCount]]  # one list per consecutive period pair
+    movement_rate: float | None
+    persona_agreement: PersonaAgreement | None
+    notes: list[str]
+
+
+@router.get("/groups", response_model=GroupingOut)
+def learner_groups(
+    batch: str | None = None,
+    synthetic: SyntheticFilter = "include",
+    k: int | None = Query(None, ge=2, le=8, description="Number of groups; omit to choose by silhouette"),
+    _: User = Depends(staff),
+    db: Session = Depends(get_db),
+) -> GroupingOut:
+    fw = load_framework(db)
+    users = list(db.scalars(learner_query(None, batch, synthetic)))
+    acts = activities_by_user(db, users)
+    histories = [
+        clustering.LearnerHistory(u.id, tuple(to_input(a) for a in acts.get(u.id, [])), u.synthetic_persona) for u in users
+    ]
+    labels = {c.key: c.label for c in fw.competencies}
+    try:
+        g = clustering.group_learners(histories, fw.weights, fw.keys, labels, date.today(), k=k)
+    except clustering.NotEnoughLearners as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+
+    return GroupingOut(
+        as_of=g.as_of,
+        period_dates=g.period_dates,
+        features="Competency profile shape (share of points per competency) + activity volume",
+        k=g.k,
+        k_selection=[KChoiceOut(**vars(c)) for c in g.k_selection],
+        algorithms=[AlgorithmOut(**vars(a)) for a in g.algorithms],
+        groups=[GroupOut(**vars(gr)) for gr in g.groups],
+        members=[GroupMember(learner=_ref(u), states=g.assignments[u.id], position=g.pca.get(u.id)) for u in users],
+        pca_explained=g.pca_explained,
+        transitions=[
+            [TransitionCount(source=a, target=b, learners=n) for (a, b), n in sorted(t.items())] for t in g.transitions
+        ],
+        movement_rate=g.movement_rate,
+        persona_agreement=PersonaAgreement(**g.persona_agreement) if g.persona_agreement else None,
+        notes=g.notes,
     )

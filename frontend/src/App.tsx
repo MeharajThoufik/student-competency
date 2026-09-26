@@ -5,6 +5,7 @@ import { Layout } from './components/Layout'
 import { Academics } from './pages/Academics'
 import { Admin } from './pages/admin/Admin'
 import { Cohort } from './pages/educator/Cohort'
+import { Groups } from './pages/educator/Groups'
 import { LearnerDetail } from './pages/educator/LearnerDetail'
 import { Learners } from './pages/educator/Learners'
 import { ReviewQueue } from './pages/educator/ReviewQueue'
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="educator/learners" element={<RequireRole roles={['educator', 'admin']}><Learners /></RequireRole>} />
           <Route path="educator/learners/:id" element={<RequireRole roles={['educator', 'admin']}><LearnerDetail /></RequireRole>} />
           <Route path="educator/cohort" element={<RequireRole roles={['educator', 'admin']}><Cohort /></RequireRole>} />
+          <Route path="educator/groups" element={<RequireRole roles={['educator', 'admin']}><Groups /></RequireRole>} />
           <Route path="admin" element={<RequireRole roles={['admin']}><Admin /></RequireRole>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Competency Evolution API"
-    version: str = "0.5.0"
+    version: str = "0.6.0"
     environment: str = "local"
     database_url: str | None = None
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]

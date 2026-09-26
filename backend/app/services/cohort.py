@@ -52,12 +52,17 @@ def learner_query(q: str | None = None, batch: str | None = None, synthetic: Syn
     return stmt.order_by(User.name)
 
 
-def learner_rows(db: Session, fw: Framework, today: date, users: list[User]) -> list[LearnerRow]:
+def activities_by_user(db: Session, users: list[User]) -> dict[int, list[Activity]]:
     by_user: dict[int, list[Activity]] = defaultdict(list)
     ids = [u.id for u in users]
     for chunk in (ids[i : i + 500] for i in range(0, len(ids), 500)):
         for a in db.scalars(select(Activity).where(Activity.user_id.in_(chunk))):
             by_user[a.user_id].append(a)
+    return by_user
+
+
+def learner_rows(db: Session, fw: Framework, today: date, users: list[User]) -> list[LearnerRow]:
+    by_user = activities_by_user(db, users)
 
     window = analytics.DEFAULT_TREND.window_months
     cutoff = analytics.add_months(today, -window)

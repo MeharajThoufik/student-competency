@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ActivitySummary, DemoBadge, EvidenceLinks, ReviewActions, RiskBadges } from '../../components/educator'
+import { ReportButton } from '../../components/ReportButton'
 import { Alert, Card, Empty, Level, Spinner } from '../../components/ui'
 import { api, type LearnerDetail as Detail } from '../../lib/api'
 import { GrowthView } from '../Growth'
@@ -35,10 +36,11 @@ export function LearnerDetail() {
             <RiskBadges risks={d.risks} rules={d.risk_rules} />
           </div>
         </div>
-        <div className="flex gap-6 text-right">
+        <div className="flex flex-wrap items-start gap-6 text-right">
           <Stat label="CGPA" value={d.academics.cgpa?.toFixed(2) ?? '—'} />
           <Stat label="Activities" value={d.activities.length} />
           <Stat label="To review" value={pending.length} />
+          <ReportButton learnerId={p.id} />
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
 import { Alert, Button, Card, Empty, Field, Input, Select, Spinner, titleCase } from '../../components/ui'
-import { api, type Role, type ScoringConfig, type Weights } from '../../lib/api'
+import { api, type Role, type ScoringConfig, type WeightImpact, type Weights } from '../../lib/api'
 
 const TABS = [
   { key: 'users', label: 'Users & roles' },
@@ -152,6 +152,9 @@ function WeightEditor({ config }: { config: ScoringConfig }) {
     for (const key of ['scoring-config', 'competencies', 'insights', 'learners', 'learner', 'cohort']) queryClient.invalidateQueries({ queryKey: [key] })
   }
   const save = useMutation({ mutationFn: () => api.updateWeights(changes), onSuccess: refresh })
+  const changesKey = JSON.stringify(changes)
+  const preview = useMutation({ mutationFn: (w: Weights) => api.previewWeights(w).then((r) => ({ key: JSON.stringify(w), impact: r })) })
+  const impact = preview.data?.key === changesKey ? preview.data.impact : null
   const reset = useMutation({ mutationFn: api.resetWeights, onSuccess: refresh })
 
   const set = (t: string, c: string, raw: string) => {
@@ -208,6 +211,12 @@ function WeightEditor({ config }: { config: ScoringConfig }) {
           </tbody>
         </table>
       </div>
+      {impact && changeCount > 0 && <ImpactPanel impact={impact} />}
+      {preview.error && (
+        <div className="mt-3">
+          <Alert>{preview.error.message}</Alert>
+        </div>
+      )}
       {(save.error || reset.error) && (
         <div className="mt-3">
           <Alert>{(save.error ?? reset.error)!.message}</Alert>
@@ -217,7 +226,10 @@ function WeightEditor({ config }: { config: ScoringConfig }) {
         <Button disabled={!changeCount} loading={save.isPending} onClick={() => save.mutate()}>
           Save {changeCount ? `${changeCount} change${changeCount > 1 ? 's' : ''}` : 'changes'}
         </Button>
-        <Button variant="secondary" disabled={!changeCount} onClick={() => setDraft(structuredClone(config.weights))}>
+        <Button variant="secondary" disabled={!changeCount} loading={preview.isPending} onClick={() => preview.mutate(changes)}>
+          Preview impact
+        </Button>
+        <Button variant="ghost" disabled={!changeCount} onClick={() => setDraft(structuredClone(config.weights))}>
           Discard
         </Button>
         <span className="flex-1" />
@@ -232,6 +244,41 @@ function WeightEditor({ config }: { config: ScoringConfig }) {
         </Button>
       </div>
     </Card>
+  )
+}
+
+function ImpactPanel({ impact }: { impact: WeightImpact }) {
+  const tau = impact.mean_kendall_tau
+  return (
+    <div className="mt-4 rounded-lg bg-slate-50 p-4">
+      <p className="text-sm">
+        <span className="font-semibold">Impact of {impact.changed_weights} change{impact.changed_weights === 1 ? '' : 's'}</span> on {impact.learners} learners:
+        mean Kendall's τ <span className="font-semibold tabular-nums">{tau == null ? '—' : tau.toFixed(3)}</span>
+        {tau != null && (tau >= 0.9 ? ' (rankings barely change)' : tau >= 0.7 ? ' (moderate reordering)' : ' (large reordering)')}; the strongest
+        competency changes for <span className="font-semibold tabular-nums">{impact.top_changed}</span> learner{impact.top_changed === 1 ? '' : 's'}.
+      </p>
+      <table className="mt-3 w-full max-w-xl text-xs">
+        <thead className="text-left text-slate-500">
+          <tr>
+            <th className="pb-1 font-medium">Competency</th>
+            <th className="pb-1 text-right font-medium" title="Rank agreement of learners before vs after (1 = same order)">Kendall's τ</th>
+            <th className="pb-1 text-right font-medium">Mean score change</th>
+            <th className="pb-1 text-right font-medium">Largest change</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+          {impact.competencies.map((c) => (
+            <tr key={c.key}>
+              <td className="py-1">{c.label}</td>
+              <td className={`py-1 text-right tabular-nums ${c.kendall_tau != null && c.kendall_tau < 0.9 ? 'font-semibold' : ''}`}>{c.kendall_tau?.toFixed(3) ?? '—'}</td>
+              <td className="py-1 text-right tabular-nums">{c.mean_change > 0 ? '+' : ''}{c.mean_change.toFixed(2)}</td>
+              <td className="py-1 text-right tabular-nums">{c.max_abs_change.toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 text-xs text-slate-500">Nothing is saved until you press Save.</p>
+    </div>
   )
 }
 

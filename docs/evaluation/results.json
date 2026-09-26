@@ -17,7 +17,7 @@
       "window_months": 6,
       "slope_threshold": 1.0
     },
-    "runtime_s": 119.4
+    "runtime_s": 67.4
   },
   "dataset": {
     "learners": 200,
@@ -530,6 +530,83 @@
       }
     }
   },
+  "grouping": {
+    "auto": {
+      "k": [
+        4,
+        4
+      ],
+      "seconds": 0.38694514997769147,
+      "movement_rate": 0.21521048043890684,
+      "algorithms": {
+        "K-Means": {
+          "silhouette": 0.507834299759896,
+          "davies_bouldin": 0.5958078077689151,
+          "ari": 0.49900368108760673,
+          "nmi": 0.6608602823718359,
+          "noise": 0.0,
+          "n_clusters": 4.0
+        },
+        "Agglomerative": {
+          "silhouette": 0.49131623084527676,
+          "davies_bouldin": 0.7107609982174661,
+          "ari": 0.6700409818672249,
+          "nmi": 0.7897706943479879,
+          "noise": 0.0,
+          "n_clusters": 4.0
+        },
+        "DBSCAN": {
+          "silhouette": 0.4257499470289948,
+          "davies_bouldin": 0.6246252554621179,
+          "ari": 0.4808991701060298,
+          "nmi": 0.5953221124370084,
+          "noise": 0.2425,
+          "n_clusters": 5.0
+        }
+      }
+    },
+    "k5": {
+      "k": [
+        5,
+        5
+      ],
+      "seconds": 0.3751056999899447,
+      "movement_rate": 0.26835615033584576,
+      "algorithms": {
+        "K-Means": {
+          "silhouette": 0.47625790927396117,
+          "davies_bouldin": 0.6473532292826545,
+          "ari": 0.6600179904415495,
+          "nmi": 0.7587075583446419,
+          "noise": 0.0,
+          "n_clusters": 5.0
+        },
+        "Agglomerative": {
+          "silhouette": 0.46490525075166445,
+          "davies_bouldin": 0.7852956910354467,
+          "ari": 0.8055436630415236,
+          "nmi": 0.8546443383786473,
+          "noise": 0.0,
+          "n_clusters": 5.0
+        },
+        "DBSCAN": {
+          "silhouette": 0.4257499470289948,
+          "davies_bouldin": 0.6246252554621179,
+          "ari": 0.4808991701060298,
+          "nmi": 0.5953221124370084,
+          "noise": 0.2425,
+          "n_clusters": 5.0
+        }
+      }
+    },
+    "movement_by_persona": {
+      "coder": 0.045871559633027525,
+      "leader": 0.23076923076923078,
+      "researcher": 1.0,
+      "all_rounder": 0.3090909090909091,
+      "fading": 0.0392156862745098
+    }
+  },
   "sensitivity": {
     "runs": 20,
     "levels": {
@@ -538,6 +615,11 @@
           "mean": 0.9988238768299997,
           "min": 0.998314614081531,
           "max": 0.9991552913629478
+        },
+        "kendall": {
+          "mean": 0.9783620898603272,
+          "min": 0.974239891982148,
+          "max": 0.98162684685804
         },
         "top1": {
           "mean": 0.9085000000000001,
@@ -561,6 +643,11 @@
           "min": 0.9939428485425958,
           "max": 0.9971757106117568
         },
+        "kendall": {
+          "mean": 0.9556208482074424,
+          "min": 0.9458730489726889,
+          "max": 0.9646042180094906
+        },
         "top1": {
           "mean": 0.8412499999999999,
           "min": 0.6975,
@@ -583,6 +670,11 @@
           "min": 0.9821812419442808,
           "max": 0.9948454960945108
         },
+        "kendall": {
+          "mean": 0.9348224482127204,
+          "min": 0.9177511581097608,
+          "max": 0.949089129374699
+        },
         "top1": {
           "mean": 0.787625,
           "min": 0.5775,
@@ -603,18 +695,18 @@
   },
   "scalability": {
     "200": {
-      "current_scores_s": 0.064,
-      "cohort_trends_s": 0.449
+      "current_scores_s": 0.035,
+      "cohort_trends_s": 0.223
     },
     "500": {
-      "current_scores_s": 0.215,
-      "cohort_trends_s": 1.138
+      "current_scores_s": 0.085,
+      "cohort_trends_s": 0.539
     },
     "1000": {
-      "current_scores_s": 0.342,
-      "cohort_trends_s": 2.574
+      "current_scores_s": 0.167,
+      "cohort_trends_s": 1.083
     },
-    "insights_ms_per_learner": 18.0,
+    "insights_ms_per_learner": 7.1,
     "mean_activities": 17.0
   },
   "figures": [
@@ -622,6 +714,7 @@
     "fig2_trend_confusion.png",
     "fig3_parameter_sweep.png",
     "fig4_clustering.png",
-    "fig5_weight_sensitivity.png"
+    "fig5_weight_sensitivity.png",
+    "fig6_grouping.png"
   ]
 }

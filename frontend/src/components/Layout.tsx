@@ -1,4 +1,4 @@
-import { Award, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut, Menu, PieChart, Settings, Sparkles, TrendingUp, UserRound, Users, X } from 'lucide-react'
+import { Award, Boxes, ClipboardCheck, GraduationCap, LayoutDashboard, LogOut, Menu, PieChart, Settings, Sparkles, TrendingUp, UserRound, Users, X } from 'lucide-react'
 import type { Role } from '../lib/api'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -25,6 +25,7 @@ const SECTIONS: NavSection[] = [
       { to: '/app/educator/queue', label: 'Review queue', icon: ClipboardCheck },
       { to: '/app/educator/learners', label: 'Learners', icon: Users },
       { to: '/app/educator/cohort', label: 'Cohort analytics', icon: PieChart },
+      { to: '/app/educator/groups', label: 'Learner groups', icon: Boxes },
     ],
   },
   { title: 'Admin', roles: ['admin'], items: [{ to: '/app/admin', label: 'Administration', icon: Settings }] },
