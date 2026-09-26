@@ -144,7 +144,7 @@ function GroupsView({ g, compLabel }: { g: Grouping; compLabel: (k: string) => s
         <Transitions g={g} />
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid gap-6 ${g.persona_agreement ? 'lg:grid-cols-2' : ''}`}>
         <Card title="Algorithm comparison (current period)">
           <Algorithms g={g} />
         </Card>
@@ -220,10 +220,10 @@ function MiniLine({ data, dataKey, label, k }: { data: Grouping['k_selection']; 
       <div className="text-xs font-medium text-slate-600">{label}</div>
       <div className="h-24">
         <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -20 }}>
+          <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={GRID} vertical={false} />
             <XAxis dataKey="k" tick={AXIS} tickLine={false} />
-            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => (dataKey === 'inertia' ? v.toFixed(0) : v.toFixed(2))} domain={['auto', 'auto']} />
+            <YAxis tick={AXIS} tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => (dataKey === 'inertia' ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0)) : v.toFixed(2))} domain={['auto', 'auto']} />
             <ReferenceLine x={k} stroke="#0f172a" strokeDasharray="3 3" />
             <Tooltip formatter={(v) => [Number(v).toFixed(3), label]} labelFormatter={(l) => `k = ${l}`} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
             <Line dataKey={dataKey} stroke={SERIES_COLORS[0]} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
@@ -370,22 +370,22 @@ function Algorithms({ g }: { g: Grouping }) {
         <thead className="text-left text-xs text-slate-500">
           <tr>
             <th className="pb-2 font-medium">Algorithm</th>
-            <th className="pb-2 text-right font-medium">Groups</th>
-            <th className="pb-2 text-right font-medium">Unassigned</th>
-            <th className="pb-2 text-right font-medium" title="Higher is better">Silhouette</th>
-            <th className="pb-2 text-right font-medium" title="Lower is better">Davies–Bouldin</th>
-            {truth && <th className="pb-2 text-right font-medium" title="Agreement with demo personas">ARI</th>}
+            <th className="px-2 pb-2 text-right font-medium">Groups</th>
+            <th className="px-2 pb-2 text-right font-medium">Unassigned</th>
+            <th className="px-2 pb-2 text-right font-medium" title="Higher is better">Silhouette</th>
+            <th className="whitespace-nowrap px-2 pb-2 text-right font-medium" title="Lower is better">Davies–Bouldin</th>
+            {truth && <th className="px-2 pb-2 text-right font-medium" title="Agreement with demo personas">ARI</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {g.algorithms.map((a) => (
             <tr key={a.name}>
               <td className="py-2 pr-2">{a.name}</td>
-              <td className="py-2 text-right tabular-nums">{a.n_clusters}</td>
-              <td className="py-2 text-right tabular-nums">{a.noise ? `${Math.round(100 * a.noise)}%` : '—'}</td>
-              <td className="py-2 text-right tabular-nums">{f2(a.silhouette)}</td>
-              <td className="py-2 text-right tabular-nums">{f2(a.davies_bouldin)}</td>
-              {truth && <td className="py-2 text-right tabular-nums">{f2(a.ari)}</td>}
+              <td className="px-2 py-2 text-right tabular-nums">{a.n_clusters}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{a.noise ? `${Math.round(100 * a.noise)}%` : '—'}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{f2(a.silhouette)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{f2(a.davies_bouldin)}</td>
+              {truth && <td className="px-2 py-2 text-right tabular-nums">{f2(a.ari)}</td>}
             </tr>
           ))}
         </tbody>
