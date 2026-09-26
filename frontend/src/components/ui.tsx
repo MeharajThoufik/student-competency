@@ -38,14 +38,16 @@ export function Button({ variant = 'primary', loading, className, children, disa
   )
 }
 
+// Full width unless the caller sets its own width (e.g. w-auto, w-28).
+const field = (extra?: string) => cx(/(^|\s)w-/.test(extra ?? '') ? '' : 'w-full', fieldClass, extra)
 const fieldClass =
-  'block w-full rounded-md border-0 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-slate-900 outline-none'
+  'block rounded-md border-0 bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-slate-900 outline-none'
 
-export const Input = (p: InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(fieldClass, p.className)} />
+export const Input = (p: InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={field(p.className)} />
 export const Textarea = (p: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea rows={3} {...p} className={cx(fieldClass, p.className)} />
+  <textarea rows={3} {...p} className={field(p.className)} />
 )
-export const Select = (p: SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(fieldClass, p.className)} />
+export const Select = (p: SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={field(p.className)} />
 
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   return (

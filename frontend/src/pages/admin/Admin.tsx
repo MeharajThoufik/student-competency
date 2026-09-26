@@ -196,7 +196,7 @@ function WeightEditor({ config }: { config: ScoringConfig }) {
                         aria-label={`${config.activity_types[t]} → ${c.label}`}
                         title={changed ? `Was ${original(t, c.key)}` : undefined}
                         className={`w-full rounded px-1.5 py-1 text-center tabular-nums outline-none focus:ring-2 focus:ring-slate-900 ${
-                          changed ? 'ring-2 ring-amber-500' : ''
+                          changed ? 'ring-2 ring-amber-500' : w === 0 ? 'ring-1 ring-inset ring-slate-200' : ''
                         } ${w > 0.55 ? 'text-white' : 'text-slate-900'}`}
                         style={{ background: cellColor(w) }}
                       />

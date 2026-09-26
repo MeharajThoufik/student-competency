@@ -125,7 +125,7 @@ function Distributions({ data }: { data: CohortData }) {
         {data.competencies.map((c) => (
           <li
             key={c.key}
-            className="grid grid-cols-[8rem_1fr_2.5rem] items-center gap-3 text-sm"
+            className="grid grid-cols-[9.5rem_1fr_2.5rem] items-center gap-3 text-sm"
             title={`${c.label}: min ${c.minimum} · 25% ${c.p25} · median ${c.median} · 75% ${c.p75} · max ${c.maximum} · mean ${c.mean}`}
           >
             <span className="truncate text-slate-700">{c.label}</span>
@@ -139,7 +139,7 @@ function Distributions({ data }: { data: CohortData }) {
           </li>
         ))}
       </ul>
-      <div className="mt-1 grid grid-cols-[8rem_1fr_2.5rem] gap-3 text-[10px] text-slate-400">
+      <div className="mt-1 grid grid-cols-[9.5rem_1fr_2.5rem] gap-3 text-[10px] text-slate-400">
         <span />
         <span className="flex justify-between">
           <span>0</span>
@@ -167,7 +167,7 @@ function TrendMix({ data }: { data: CohortData }) {
         {data.competencies.map((c) => {
           const total = TREND_ORDER.reduce((n, t) => n + c.trends[t], 0)
           return (
-            <li key={c.key} className="grid grid-cols-[8rem_1fr_4.5rem] items-center gap-3 text-sm">
+            <li key={c.key} className="grid grid-cols-[9.5rem_1fr_6.5rem] items-center gap-3 text-sm">
               <span className="truncate text-slate-700">{c.label}</span>
               <span className="flex h-5 gap-0.5 overflow-hidden rounded" role="img" aria-label={`${c.label}: ${TREND_ORDER.map((t) => `${c.trends[t]} ${TREND_STYLE[t].label.toLowerCase()}`).join(', ')}`}>
                 {total === 0 ? (
@@ -188,7 +188,7 @@ function TrendMix({ data }: { data: CohortData }) {
                   })
                 )}
               </span>
-              <span className="text-right text-xs text-slate-500" title="Learners with no score in this competency">
+              <span className="whitespace-nowrap text-right text-xs text-slate-500" title="Learners with no score in this competency">
                 {c.trends.inactive ? `+${c.trends.inactive} not started` : ''}
               </span>
             </li>
