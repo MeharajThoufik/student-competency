@@ -221,6 +221,19 @@ Each phase ends with a **working, deployed increment** at the live link.
 P0 Skeleton → P1 Profile → P2 Scoring → P3 Evolution → P4 Educator → P5 Intelligence → P6 Cloud-native → P7 Evaluate
 ```
 
+### Progress (updated 2026-09-26)
+
+| Phase | Status | Notes / deviations |
+|---|---|---|
+| P0 | ✅ Done | |
+| P1 | ✅ Done | Evidence is streamed through the API after an access check instead of signed URLs; roles are stored in the database instead of Firebase custom claims (take effect immediately) |
+| P2 | ✅ Done | |
+| P3 | ✅ Done | |
+| P4 | ✅ Done | Three demo accounts: sign up two more accounts and set their roles in Administration |
+| P5 | ✅ Done | Sensitivity reports Kendall's τ and Spearman ρ; validation in `docs/evaluation/REPORT.md` |
+| P6 | ⏳ Not started | Secret Manager and budget alerts already in place |
+| P7 | 🟡 Started | RQ3 trend accuracy done in `docs/evaluation/`; user study, report, video, slides remain |
+
 ### P0 · Walking Skeleton — Sep 26–28 (3 days)
 - Monorepo, docker-compose (API + Postgres), Vite app, FastAPI `/api/health`
 - GCP project, budget alerts, Artifact Registry
