@@ -56,3 +56,17 @@ scripts/       One-time cloud setup
 .github/       CI/CD workflow
 firebase.json  Hosting config + /api/** → Cloud Run rewrite
 ```
+
+## Evaluation (P5)
+
+Offline experiments on synthetic learners with known growth patterns: trend-detection accuracy, parameter tuning
+(tuned on seeds 1–3, reported on held-out seeds 4–5), clustering against personas, weight sensitivity and scalability.
+
+```bash
+cd backend
+pip install -r requirements-eval.txt
+python -m app.evaluation.run --out ../docs/evaluation   # ~2 min, deterministic
+```
+
+Results: [`docs/evaluation/REPORT.md`](docs/evaluation/REPORT.md) (tables, figures, threats to validity) and
+`docs/evaluation/results.json` (all numbers).
